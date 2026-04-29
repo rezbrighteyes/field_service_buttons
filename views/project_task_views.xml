@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Inherit the Field Service task form to add Order and Credit Note buttons
+        next to the Mark as Done button on sub-tasks.
+    -->
+    <record id="view_task_form_fsm_reza_buttons" model="ir.ui.view">
+        <field name="name">project.task.form.fsm.reza.buttons</field>
+        <field name="model">project.task</field>
+        <!-- Inherit from the FSM task form -->
+        <field name="inherit_id" ref="industry_fsm.project_task_form_view_fsm"/>
+        <field name="arch" type="xml">
+            <!-- Add our buttons right before the "Mark as Done" button -->
+            <button name="action_fsm_validate" position="before">
+                <button
+                    name="action_create_sale_order"
+                    string="Order"
+                    type="object"
+                    class="btn-primary"
+                    icon="fa-shopping-cart"
+                />
+                <button
+                    name="action_create_credit_note"
+                    string="Credit Note"
+                    type="object"
+                    class="btn-secondary"
+                    icon="fa-file-text-o"
+                />
+            </button>
+        </field>
+    </record>
+</odoo>
