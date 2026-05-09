@@ -8,7 +8,7 @@
         <field name="name">project.task.form.fsm.reza.buttons</field>
         <field name="model">project.task</field>
         <!-- Inherit from the FSM task form -->
-        <field name="inherit_id" ref="industry_fsm.project_task_form_view_fsm"/>
+        <field name="inherit_id" ref="industry_fsm.view_task_form2_inherit"/>
         <field name="arch" type="xml">
             <!-- Add our buttons right before the "Mark as Done" button -->
             <button name="action_fsm_validate" position="before">
