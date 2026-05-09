@@ -14,6 +14,11 @@
         'security/ir.model.access.csv',
         'views/project_task_views.xml',
     ],
+    'assets': {
+        'web.assets_backend': [
+            'reza_field_service_buttons/static/src/js/list_delete_confirm.js',
+        ],
+    },
     'installable': True,
     'application': False,
     'license': 'OPL-1',
