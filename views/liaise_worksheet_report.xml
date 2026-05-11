@@ -1,6 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
+    <!-- Search view with filters -->
+    <record id="view_liaise_worksheet_report_search" model="ir.ui.view">
+        <field name="name">liaise.worksheet.report.search</field>
+        <field name="model">x_project_task_worksheet_template_3</field>
+        <field name="arch" type="xml">
+            <search string="Liaise Worksheet Visits">
+                <field name="x_project_task_id" string="Store"/>
+                <field name="create_uid" string="Rep"/>
+                <filter name="this_week" string="This Week"
+                    domain="[('create_date', '>=', (context_today() - relativedelta(weeks=1)).strftime('%Y-%m-%d'))]"/>
+                <filter name="this_month" string="This Month"
+                    domain="[('create_date', '>=', (context_today() - relativedelta(months=1)).strftime('%Y-%m-%d'))]"/>
+                <separator/>
+                <filter name="order_placed" string="Order Placed"
+                    domain="[('x_order_placed', '=', True)]"/>
+                <filter name="low_stock" string="Has Low Stock"
+                    domain="['|', '|', '|', '|',
+                        ('x_thongs', '=', 'low'),
+                        ('x_sunnies', '=', 'low'),
+                        ('x_hats', '=', 'low'),
+                        ('x_tech', '=', 'low'),
+                        ('x_outdoor', '=', 'low')]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_by_rep" string="Rep" context="{'group_by': 'create_uid'}"/>
+                    <filter name="group_by_store" string="Store" context="{'group_by': 'x_project_task_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
     <!-- Manager form view with larger images -->
     <record id="view_liaise_worksheet_report_form" model="ir.ui.view">
         <field name="name">liaise.worksheet.report.form</field>
@@ -80,7 +110,11 @@
         <field name="name">Liaise Worksheet Visits</field>
         <field name="res_model">x_project_task_worksheet_template_3</field>
         <field name="view_mode">list,form</field>
-        <field name="views">[(ref('view_liaise_worksheet_report_list'), 'list'), (ref('view_liaise_worksheet_report_form'), 'form')]</field>
+        <field name="search_view_id" ref="view_liaise_worksheet_report_search"/>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_liaise_worksheet_report_list')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_liaise_worksheet_report_form')}),
+        ]"/>
     </record>
 
     <!-- Menu under Field Service > Reporting -->
