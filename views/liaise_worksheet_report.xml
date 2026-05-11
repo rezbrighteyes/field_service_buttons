@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_liaise_worksheet_report_list" model="ir.ui.view">
+        <field name="name">liaise.worksheet.report.list</field>
+        <field name="model">x_project_task_worksheet_template_3</field>
+        <field name="arch" type="xml">
+            <list string="Liaise Worksheet Visits" create="false" edit="false">
+                <field name="create_date" string="Date"/>
+                <field name="x_project_task_id" string="Store"/>
+                <field name="reza_rep_ids" string="Rep" widget="many2many_tags"/>
+                <field name="x_thongs" string="Thongs"/>
+                <field name="x_sunnies" string="Sunnies"/>
+                <field name="x_hats" string="Hats"/>
+                <field name="x_tech" string="Tech"/>
+                <field name="x_outdoor" string="Outdoor / Other"/>
+                <field name="x_order_placed" string="Order Placed"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_liaise_worksheet_report" model="ir.actions.act_window">
+        <field name="name">Liaise Worksheet Visits</field>
+        <field name="res_model">x_project_task_worksheet_template_3</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="view_liaise_worksheet_report_list"/>
+    </record>
+
+    <menuitem
+        id="menu_liaise_worksheet_report"
+        name="Liaise Worksheet Visits"
+        parent="industry_fsm.fsm_menu_reporting"
+        action="action_liaise_worksheet_report"
+        sequence="20"/>
+
+</odoo>
