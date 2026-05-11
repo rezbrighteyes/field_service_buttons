@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <!-- Search view with filters -->
+    <!-- Search view - minimal -->
     <record id="view_liaise_worksheet_report_search" model="ir.ui.view">
         <field name="name">liaise.worksheet.report.search</field>
         <field name="model">x_project_task_worksheet_template_3</field>
@@ -9,9 +9,7 @@
             <search string="Liaise Worksheet Visits">
                 <field name="x_project_task_id" string="Store"/>
                 <field name="create_uid" string="Rep"/>
-                <filter name="this_month" string="This Month" domain="[('create_date', '&gt;=', context_today().replace(day=1).strftime('%Y-%m-%d'))]"/>
                 <filter name="order_placed" string="Order Placed" domain="[('x_order_placed', '=', True)]"/>
-                <filter name="low_stock" string="Has Low Stock" domain="['|', '|', '|', '|', ('x_thongs', '=', 'low'), ('x_sunnies', '=', 'low'), ('x_hats', '=', 'low'), ('x_tech', '=', 'low'), ('x_outdoor', '=', 'low')]"/>
                 <group expand="0" string="Group By">
                     <filter name="group_by_rep" string="Rep" context="{'group_by': 'create_uid'}"/>
                     <filter name="group_by_store" string="Store" context="{'group_by': 'x_project_task_id'}"/>
