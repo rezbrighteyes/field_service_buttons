@@ -8,7 +8,7 @@
             <list string="Liaise Worksheet Visits" create="false" edit="false">
                 <field name="create_date" string="Date"/>
                 <field name="x_project_task_id" string="Store"/>
-                <field name="reza_rep_ids" string="Rep" widget="many2many_tags"/>
+                <field name="create_uid" string="Rep"/>
                 <field name="x_thongs" string="Thongs"/>
                 <field name="x_sunnies" string="Sunnies"/>
                 <field name="x_hats" string="Hats"/>
