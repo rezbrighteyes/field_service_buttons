@@ -9,20 +9,9 @@
             <search string="Liaise Worksheet Visits">
                 <field name="x_project_task_id" string="Store"/>
                 <field name="create_uid" string="Rep"/>
-                <filter name="this_week" string="This Week"
-                    domain="[('create_date', '>=', (context_today() - relativedelta(weeks=1)).strftime('%Y-%m-%d'))]"/>
-                <filter name="this_month" string="This Month"
-                    domain="[('create_date', '>=', (context_today() - relativedelta(months=1)).strftime('%Y-%m-%d'))]"/>
-                <separator/>
-                <filter name="order_placed" string="Order Placed"
-                    domain="[('x_order_placed', '=', True)]"/>
-                <filter name="low_stock" string="Has Low Stock"
-                    domain="['|', '|', '|', '|',
-                        ('x_thongs', '=', 'low'),
-                        ('x_sunnies', '=', 'low'),
-                        ('x_hats', '=', 'low'),
-                        ('x_tech', '=', 'low'),
-                        ('x_outdoor', '=', 'low')]"/>
+                <filter name="this_month" string="This Month" domain="[('create_date', '&gt;=', context_today().replace(day=1).strftime('%Y-%m-%d'))]"/>
+                <filter name="order_placed" string="Order Placed" domain="[('x_order_placed', '=', True)]"/>
+                <filter name="low_stock" string="Has Low Stock" domain="['|', '|', '|', '|', ('x_thongs', '=', 'low'), ('x_sunnies', '=', 'low'), ('x_hats', '=', 'low'), ('x_tech', '=', 'low'), ('x_outdoor', '=', 'low')]"/>
                 <group expand="0" string="Group By">
                     <filter name="group_by_rep" string="Rep" context="{'group_by': 'create_uid'}"/>
                     <filter name="group_by_store" string="Store" context="{'group_by': 'x_project_task_id'}"/>
