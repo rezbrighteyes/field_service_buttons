@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <!-- Manager form view with larger images -->
+    <!-- Manager form view - thumbnails with click to enlarge -->
     <record id="view_liaise_worksheet_report_form" model="ir.ui.view">
         <field name="name">liaise.worksheet.report.form</field>
         <field name="model">x_project_task_worksheet_template_3</field>
@@ -22,19 +22,19 @@
                     <separator string="Display Photos"/>
                     <group>
                         <group>
-                            <field name="x_display_photo" string="Photo 1" widget="image" options="{'size': [600, 400]}"/>
+                            <field name="x_display_photo" string="Photo 1" widget="image" options="{'size': [300, 200]}"/>
                             <field name="x_photo_1_caption" string="Caption"/>
                         </group>
                         <group>
-                            <field name="x_display_photo_2" string="Photo 2" widget="image" options="{'size': [600, 400]}"/>
+                            <field name="x_display_photo_2" string="Photo 2" widget="image" options="{'size': [300, 200]}"/>
                             <field name="x_photo_2_caption" string="Caption"/>
                         </group>
                         <group>
-                            <field name="x_display_photo_3" string="Photo 3" widget="image" options="{'size': [600, 400]}"/>
+                            <field name="x_display_photo_3" string="Photo 3" widget="image" options="{'size': [300, 200]}"/>
                             <field name="x_photo_3_caption" string="Caption"/>
                         </group>
                         <group>
-                            <field name="x_display_photo_4" string="Photo 4" widget="image" options="{'size': [600, 400]}"/>
+                            <field name="x_display_photo_4" string="Photo 4" widget="image" options="{'size': [300, 200]}"/>
                             <field name="x_photo_4_caption" string="Caption"/>
                         </group>
                     </group>
@@ -83,7 +83,6 @@
         <field name="view_mode">list,form</field>
     </record>
 
-    <!-- Explicitly bind list view to action -->
     <record id="action_view_liaise_list" model="ir.actions.act_window.view">
         <field name="act_window_id" ref="action_liaise_worksheet_report"/>
         <field name="view_id" ref="view_liaise_worksheet_report_list"/>
@@ -91,7 +90,6 @@
         <field name="sequence">1</field>
     </record>
 
-    <!-- Explicitly bind form view to action -->
     <record id="action_view_liaise_form" model="ir.actions.act_window.view">
         <field name="act_window_id" ref="action_liaise_worksheet_report"/>
         <field name="view_id" ref="view_liaise_worksheet_report_form"/>
