@@ -2,7 +2,6 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 
-
 class ProjectTask(models.Model):
     _inherit = 'project.task'
 
@@ -12,15 +11,14 @@ class ProjectTask(models.Model):
         partner = self.partner_id
         if not partner:
             raise UserError(_('This task has no customer set. Please set a customer first.'))
-
-        sale_order = self.env['sale.order'].create({
+        ctx = {k: v for k, v in self.env.context.items() if k != 'default_tag_ids'}
+        sale_order = self.env['sale.order'].with_context(ctx).create({
             'partner_id': partner.id,
             'partner_invoice_id': partner.id,
             'partner_shipping_id': partner.id,
             'origin': self.name,
             'note': _('Created from Field Service task: %s') % self.name,
         })
-
         return {
             'type': 'ir.actions.act_window',
             'name': _('Sale Order'),
@@ -36,14 +34,12 @@ class ProjectTask(models.Model):
         partner = self.partner_id
         if not partner:
             raise UserError(_('This task has no customer set. Please set a customer first.'))
-
         credit_note = self.env['account.move'].create({
             'move_type': 'out_refund',
             'partner_id': partner.id,
             'invoice_origin': self.name,
             'narration': _('Created from Field Service task: %s') % self.name,
         })
-
         return {
             'type': 'ir.actions.act_window',
             'name': _('Credit Note'),
