@@ -5,8 +5,11 @@ from odoo.exceptions import UserError
 class ProjectTask(models.Model):
     _inherit = 'project.task'
 
+    # ─────────────────────────────────────────────
+    # Existing buttons (unchanged)
+    # ─────────────────────────────────────────────
+
     def action_create_sale_order(self):
-        """Create a new Sale Order pre-filled with customer info from this task."""
         self.ensure_one()
         partner = self.partner_id
         if not partner:
@@ -29,7 +32,6 @@ class ProjectTask(models.Model):
         }
 
     def action_create_credit_note(self):
-        """Create a new Credit Note pre-filled with customer info from this task."""
         self.ensure_one()
         partner = self.partner_id
         if not partner:
@@ -48,3 +50,95 @@ class ProjectTask(models.Model):
             'view_mode': 'form',
             'target': 'current',
         }
+
+    # ─────────────────────────────────────────────
+    # Block manual parent task state change for non-managers
+    # ─────────────────────────────────────────────
+
+    def write(self, vals):
+        state_fields = {'state', 'stage_id', 'kanban_state'}
+        if state_fields & vals.keys():
+            for task in self:
+                # Only block parent tasks (tasks that have sub-tasks)
+                if task.child_ids:
+                    is_manager = self.env.user.has_group('project.group_project_manager')
+                    if not is_manager:
+                        raise UserError(_(
+                            'You cannot change the status of a run task manually. '
+                            'It will update automatically when all sub-tasks are completed.'
+                        ))
+        return super().write(vals)
+
+    # ─────────────────────────────────────────────
+    # Auto-update parent state when sub-task changes
+    # ─────────────────────────────────────────────
+
+    def _update_parent_state(self):
+        """Recompute parent task state based on all sub-task states."""
+        parent = self.parent_id
+        if not parent:
+            return
+
+        subtasks = parent.child_ids
+        if not subtasks:
+            return
+
+        total = len(subtasks)
+        canceled = subtasks.filtered(lambda t: t.state == '1_canceled')
+        done = subtasks.filtered(lambda t: t.state == '1_done')
+        closed = canceled | done
+        canceled_count = len(canceled)
+
+        # Determine new parent state
+        if len(closed) < total:
+            # Some tasks still open — keep In Progress
+            new_state = '01_in_progress'
+        elif canceled_count == total:
+            # All canceled
+            new_state = '1_canceled'
+        else:
+            # All closed, at least one done
+            new_state = '1_done'
+
+        # Only write if state actually changed (avoids recursion)
+        if parent.state != new_state:
+            parent.sudo().write({'state': new_state})
+
+            # If more than half are canceled but we're marking Done, notify managers
+            if new_state == '1_done' and canceled_count > total / 2:
+                manager_users = self.env.ref('project.group_project_manager').users
+                follower_ids = manager_users.partner_id.ids
+                parent.message_post(
+                    body=_(
+                        '⚠️ Run completed but <b>%d of %d</b> sub-tasks were canceled. '
+                        'Please review this run.'
+                    ) % (canceled_count, total),
+                    partner_ids=follower_ids,
+                    message_type='comment',
+                    subtype_xmlid='mail.mt_comment',
+                )
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        tasks = super().create(vals_list)
+        for task in tasks:
+            task._update_parent_state()
+        return tasks
+
+    def write(self, vals):
+        state_fields = {'state', 'stage_id', 'kanban_state'}
+        if state_fields & vals.keys():
+            for task in self:
+                if task.child_ids:
+                    is_manager = self.env.user.has_group('project.group_project_manager')
+                    if not is_manager:
+                        raise UserError(_(
+                            'You cannot change the status of a run task manually. '
+                            'It will update automatically when all sub-tasks are completed.'
+                        ))
+        result = super().write(vals)
+        # After saving, recompute parent state for any affected task
+        if state_fields & vals.keys():
+            for task in self:
+                task._update_parent_state()
+        return result
