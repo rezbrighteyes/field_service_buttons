@@ -52,24 +52,6 @@ class ProjectTask(models.Model):
         }
 
     # ─────────────────────────────────────────────
-    # Block manual parent task state change for non-managers
-    # ─────────────────────────────────────────────
-
-    def write(self, vals):
-        state_fields = {'state', 'stage_id', 'kanban_state'}
-        if state_fields & vals.keys():
-            for task in self:
-                # Only block parent tasks (tasks that have sub-tasks)
-                if task.child_ids:
-                    is_manager = self.env.user.has_group('project.group_project_manager')
-                    if not is_manager:
-                        raise UserError(_(
-                            'You cannot change the status of a run task manually. '
-                            'It will update automatically when all sub-tasks are completed.'
-                        ))
-        return super().write(vals)
-
-    # ─────────────────────────────────────────────
     # Auto-update parent state when sub-task changes
     # ─────────────────────────────────────────────
 
@@ -91,13 +73,10 @@ class ProjectTask(models.Model):
 
         # Determine new parent state
         if len(closed) < total:
-            # Some tasks still open — keep In Progress
             new_state = '01_in_progress'
         elif canceled_count == total:
-            # All canceled
             new_state = '1_canceled'
         else:
-            # All closed, at least one done
             new_state = '1_done'
 
         # Only write if state actually changed (avoids recursion)
@@ -106,17 +85,24 @@ class ProjectTask(models.Model):
 
             # If more than half are canceled but we're marking Done, notify managers
             if new_state == '1_done' and canceled_count > total / 2:
-                manager_users = self.env.ref('project.group_project_manager').users
-                follower_ids = manager_users.partner_id.ids
-                parent.message_post(
-                    body=_(
-                        '⚠️ Run completed but <b>%d of %d</b> sub-tasks were canceled. '
-                        'Please review this run.'
-                    ) % (canceled_count, total),
-                    partner_ids=follower_ids,
-                    message_type='comment',
-                    subtype_xmlid='mail.mt_comment',
-                )
+                group = self.env.ref('project.group_project_manager')
+                self.env.cr.execute("""
+                    SELECT u.partner_id
+                    FROM res_users u
+                    JOIN res_groups_users_rel r ON r.uid = u.id
+                    WHERE r.gid = %s AND u.active = true
+                """, [group.id])
+                partner_ids = [row[0] for row in self.env.cr.fetchall()]
+                if partner_ids:
+                    parent.message_post(
+                        body=_(
+                            '⚠️ Run completed but <b>%d of %d</b> sub-tasks were canceled. '
+                            'Please review this run.'
+                        ) % (canceled_count, total),
+                        partner_ids=partner_ids,
+                        message_type='comment',
+                        subtype_xmlid='mail.mt_comment',
+                    )
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -129,6 +115,7 @@ class ProjectTask(models.Model):
         state_fields = {'state', 'stage_id', 'kanban_state'}
         if state_fields & vals.keys():
             for task in self:
+                # Block manual state change on parent tasks for non-managers
                 if task.child_ids:
                     is_manager = self.env.user.has_group('project.group_project_manager')
                     if not is_manager:
@@ -137,7 +124,7 @@ class ProjectTask(models.Model):
                             'It will update automatically when all sub-tasks are completed.'
                         ))
         result = super().write(vals)
-        # After saving, recompute parent state for any affected task
+        # After saving, recompute parent state for any affected sub-task
         if state_fields & vals.keys():
             for task in self:
                 task._update_parent_state()
