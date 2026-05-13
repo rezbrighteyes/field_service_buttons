@@ -65,11 +65,12 @@ class TestFSMChatterLock(TransactionCase):
             subtype_xmlid='mail.mt_note',
         )
         self.partner = self.env['res.partner'].create({'name': 'FSM Customer'})
-        self.customer_audit_message = self.partner.with_user(self.controller).message_post(
-            body='<!--fsm_audit_mirror-->Rep update from Test Rep on sub-task "X": hi',
+        self.customer_audit_message = self.partner.sudo().message_post(
+            body='Rep update from Test Rep on sub-task "X": hi',
             message_type='comment',
             subtype_xmlid='mail.mt_note',
         )
+        self.customer_audit_message.sudo().write({'x_is_fsm_mirror': True})
 
     # ── write() path (direct ORM) ─────────────────────────────────────────
 

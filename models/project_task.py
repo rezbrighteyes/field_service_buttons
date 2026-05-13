@@ -190,7 +190,7 @@ class ProjectTask(models.Model):
                     )
                 # Also leave an audit note on the customer chatter when available.
                 if parent.partner_id:
-                    parent.partner_id.with_user(SUPERUSER_ID).sudo().message_post(
+                    _m = parent.partner_id.with_user(SUPERUSER_ID).sudo().message_post(
                         body=_(
                             'Field Service run <b>%s</b> completed with %d of %d sub-tasks canceled '
                             '(over 50%% canceled).'
@@ -198,6 +198,8 @@ class ProjectTask(models.Model):
                         message_type='comment',
                         subtype_xmlid='mail.mt_note',
                     )
+                    if _m:
+                        _m.write({'x_is_fsm_mirror': True})
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -291,13 +293,15 @@ class ProjectTask(models.Model):
                     continue
                 if not task.partner_id:
                     continue
-                task.partner_id.message_post(
+                _m = task.partner_id.message_post(
                     body=_(
                         'Worksheet completed for Field Service task <b>%s</b>.'
                     ) % (task.display_name,),
                     message_type='comment',
                     subtype_xmlid='mail.mt_note',
                 )
+                if _m:
+                    _m.sudo().write({'x_is_fsm_mirror': True})
                 task.sudo().with_context(mail_notrack=True).write({
                     'worksheet_customer_notified': True,
                 })
@@ -323,13 +327,15 @@ class ProjectTask(models.Model):
                 )
                 customer = task.partner_id or task.parent_id.partner_id
                 if customer:
-                    customer.with_user(SUPERUSER_ID).sudo().message_post(
-                        body='<!--fsm_audit_mirror-->' + _(
+                    _m = customer.with_user(SUPERUSER_ID).sudo().message_post(
+                        body=_(
                             'Sub-task "%s" was marked %s by %s.'
                         ) % (task.display_name, state_label, rep_name),
                         message_type='comment',
                         subtype_xmlid='mail.mt_note',
                     )
+                    if _m:
+                        _m.write({'x_is_fsm_mirror': True})
 
         # After saving, recompute parent state for any affected sub-task
         if changed_state_fields:
@@ -391,11 +397,13 @@ class ProjectTask(models.Model):
             return message
 
         rep_name = self.env.user.name
-        customer.with_user(SUPERUSER_ID).sudo().message_post(
-            body='<!--fsm_audit_mirror-->' + _(
+        _m = customer.with_user(SUPERUSER_ID).sudo().message_post(
+            body=_(
                 'Rep update from %s on sub-task "%s": %s'
             ) % (rep_name, task.display_name, body),
             message_type='comment',
             subtype_xmlid='mail.mt_note',
         )
+        if _m:
+            _m.write({'x_is_fsm_mirror': True})
         return message
