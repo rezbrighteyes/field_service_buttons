@@ -188,13 +188,14 @@ class ProjectTask(models.Model):
         state_fields = {'state', 'stage_id', 'kanban_state'}
         if state_fields & vals.keys():
             for task in self:
-                # Block manual state/stage change on parent tasks for non-managers
-                if task.child_ids:
+                # Block manual state/stage change on FSM tasks for non-managers.
+                # Managers keep override capability.
+                if task.is_fsm:
                     is_manager = self.env.user.has_group('project.group_project_manager')
                     if not is_manager:
                         raise UserError(_(
-                            'You cannot change the status of a run task manually. '
-                            'It will update automatically when all sub-tasks are completed.'
+                            'You cannot change the status of a field service task manually. '
+                            'It will update automatically when sub-tasks are completed.'
                         ))
         result = super().write(vals)
         # After saving, recompute parent state for any affected sub-task
