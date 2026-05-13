@@ -1,14 +1,1 @@
-/* Hide unwanted state dropdown items - scoped to FSM task views only */
-/* .o_fsm_task is added by industry_fsm to the task form */
-
-.o_fsm_task .o-dropdown-item:has(.o_status_changes_requested),
-.o_fsm_task .o-dropdown-item:has(.o_status_approved),
-.o_fsm_task .o-dropdown-item:has(.o_status_waiting),
-.o_fsm_task .o-dropdown-item:has(.o_status:not(.o_status_green):not(.text-danger)) {
-    display: none !important;
-}
-
-/* Hide hr dividers inside the state dropdown on FSM tasks */
-.o_fsm_task .o_field_state_selection .dropdown-menu hr {
-    display: none !important;
-}
+/* Intentionally empty - state filtering handled via JS patch */
