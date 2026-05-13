@@ -210,6 +210,9 @@ class ProjectTask(models.Model):
         previous_fsm_done = {}
         if 'fsm_done' in vals and vals.get('fsm_done'):
             previous_fsm_done = {task.id: bool(task.fsm_done) for task in self}
+        previous_state = {}
+        if 'state' in vals:
+            previous_state = {task.id: task.state for task in self}
 
         state_fields = {'state', 'stage_id', 'kanban_state'}
         changed_state_fields = sorted(state_fields & set(vals.keys()))
@@ -227,15 +230,24 @@ class ProjectTask(models.Model):
             for task in self:
                 bypass_auto = bool(self.env.context.get('allow_fsm_parent_status_auto'))
                 in_fsm_controllers = self.env.user.has_group('reza_field_service_buttons.group_fsm_controllers')
+                all_subtasks_closed = bool(task.child_ids) and all(
+                    child.state in CLOSED_STATES for child in task.child_ids
+                )
                 should_block = bool(
-                    task.is_fsm and task.child_ids and not bypass_auto and not in_fsm_controllers
+                    task.is_fsm
+                    and task.child_ids
+                    and not bypass_auto
+                    and not in_fsm_controllers
+                    and not all_subtasks_closed
                 )
 
                 _logger.info(
-                    "FSM_GUARD evaluate task_id=%s is_fsm=%s child_count=%s bypass_auto=%s in_fsm_controllers=%s -> block=%s",
+                    "FSM_GUARD evaluate task_id=%s is_fsm=%s child_count=%s all_subtasks_closed=%s "
+                    "bypass_auto=%s in_fsm_controllers=%s -> block=%s",
                     task.id,
                     task.is_fsm,
                     len(task.child_ids),
+                    all_subtasks_closed,
                     bypass_auto,
                     in_fsm_controllers,
                     should_block,
@@ -248,11 +260,16 @@ class ProjectTask(models.Model):
                     ))
         result = super().write(vals)
 
-        # Post worksheet completion to customer chatter once per task.
-        if 'fsm_done' in vals and vals.get('fsm_done'):
+        # Post completion to customer chatter once per task.
+        # Trigger on worksheet completion or state transition to done.
+        if ('fsm_done' in vals and vals.get('fsm_done')) or ('state' in vals and vals.get('state') == '1_done'):
             for task in self:
                 was_done = previous_fsm_done.get(task.id, False)
-                if was_done:
+                became_done_from_worksheet = ('fsm_done' in vals and vals.get('fsm_done') and not was_done)
+                old_state = previous_state.get(task.id)
+                became_done_from_state = ('state' in vals and vals.get('state') == '1_done' and old_state != '1_done')
+
+                if not became_done_from_worksheet and not became_done_from_state:
                     continue
                 if task.worksheet_customer_notified:
                     continue
