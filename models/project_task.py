@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo import models, api, _
+from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 
 # Field Service project stage IDs (project.task.type)
@@ -19,6 +19,30 @@ CLOSED_STATES = {'1_done', '1_canceled'}
 
 class ProjectTask(models.Model):
     _inherit = 'project.task'
+
+    # Backward-compatibility field for previously deployed view customizations.
+    # Some databases may still contain inherited views referencing `fsm_state`.
+    fsm_state = fields.Selection(
+        selection=[
+            ('01_in_progress', 'In Progress'),
+            ('1_canceled', 'Cancelled'),
+            ('1_done', 'Done'),
+        ],
+        string='Status',
+        compute='_compute_fsm_state',
+        inverse='_set_fsm_state',
+    )
+
+    _VALID_FSM_STATES = frozenset(['01_in_progress', '1_canceled', '1_done'])
+
+    @api.depends('state')
+    def _compute_fsm_state(self):
+        for task in self:
+            task.fsm_state = task.state if task.state in self._VALID_FSM_STATES else '01_in_progress'
+
+    def _set_fsm_state(self):
+        for task in self:
+            task.state = task.fsm_state
 
     # ─────────────────────────────────────────────
     # Override _compute_state to respect subtask completion

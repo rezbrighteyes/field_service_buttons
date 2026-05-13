@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <!-- Remove orphaned state-filter view left in the database by a previous upgrade -->
+    <delete model="ir.ui.view" search="[('name', '=', 'project.task.form2.fsm.state.filter')]"/>
+
     <record id="view_task_form_fsm_reza_buttons" model="ir.ui.view">
         <field name="name">project.task.form.fsm.reza.buttons</field>
         <field name="model">project.task</field>
