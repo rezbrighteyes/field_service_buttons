@@ -6,12 +6,11 @@ import { StateSelectionField } from "@web/views/fields/state_selection/state_sel
 const ALLOWED_STATES = ["01_in_progress", "1_canceled", "1_done"];
 
 patch(StateSelectionField.prototype, {
-    get stateItems() {
-        const items = super.stateItems;
-        // Only filter on FSM tasks (project.task with fsm_is_fsm_task)
+    get options() {
+        const items = super.options;
         if (this.props.record?.resModel === "project.task" &&
             this.props.record?.data?.is_fsm) {
-            return items.filter(item => ALLOWED_STATES.includes(item[0]));
+            return items.filter(([state]) => ALLOWED_STATES.includes(state));
         }
         return items;
     },
