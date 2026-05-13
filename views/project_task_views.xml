@@ -27,6 +27,12 @@
                     icon="fa-file-text-o"
                 />
             </button>
+            <!-- Replace the state widget with a plain select showing only our 3 options -->
+            <field name="state" position="replace">
+                <field name="state" widget="statusbar"
+                    statusbar_visible="01_in_progress,1_canceled,1_done"
+                    options="{'clickable': '1'}"/>
+            </field>
         </field>
     </record>
 </odoo>
