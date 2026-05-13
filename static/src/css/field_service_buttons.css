@@ -1,24 +1,28 @@
-/* Hide state options not in our allowed 3: In Progress, Cancelled, Done */
-/* The state_selection widget renders all Odoo states — we hide the unwanted ones */
+/* Hide unwanted state dropdown items - target by actual Odoo class names */
 
-/* Hide the waiting/blocked dot states (grey dots) */
-.o_status_bubble,
-.o_field_state_selection .o_status:not([data-value="01_in_progress"]):not([data-value="1_done"]):not([data-value="1_canceled"]) {
+/* Hide the exclamation/changes-requested item */
+.o-dropdown-item:has(.o_status_changes_requested) {
     display: none !important;
 }
 
-/* Hide unwanted dropdown items in the state picker popup */
-.o_state_selection_list .o_item_option[data-value="02_changes_requested"],
-.o_state_selection_list .o_item_option[data-value="03_approved"],
-.o_state_selection_list .o_item_option[data-value="04_waiting_normal"],
-.o_state_selection_list .o_item_option[data-value="1_blocked"],
-.o_state_selection_list .o_item_option[data-value="normal"],
-.o_state_selection_list .o_item_option[data-value="blocked"],
-.o_state_selection_list .o_item_option[data-value="done"] {
+/* Hide the approved (thumbs up) item */
+.o-dropdown-item:has(.o_status_approved) {
     display: none !important;
 }
 
-/* Also hide the divider/gap between groups if all items in a group are hidden */
+/* Hide the waiting/blocked item */
+.o-dropdown-item:has(.o_status_waiting) {
+    display: none !important;
+}
+
+/* Hide the grey dot (normal/in-progress bubble) - keep only our 3 */
+/* The green dot is o_status_green (Done), red X is Cancelled, grey is unwanted */
+.o-dropdown-item:has(.o_status:not(.o_status_green):not(.text-danger)) {
+    display: none !important;
+}
+
+/* Hide any hr dividers inside the state dropdown */
+.o_field_state_selection .dropdown-menu hr,
 .o_state_selection_list hr {
     display: none !important;
 }
