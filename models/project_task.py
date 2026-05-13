@@ -227,6 +227,18 @@ class ProjectTask(models.Model):
                 vals,
                 dict(self.env.context),
             )
+            child_cmds = vals.get('child_ids') if isinstance(vals, dict) else False
+            is_inline_subtask_update = bool(
+                child_cmds
+                and isinstance(child_cmds, list)
+                and all(
+                    isinstance(cmd, (list, tuple))
+                    and len(cmd) >= 3
+                    and cmd[0] == 1
+                    and isinstance(cmd[2], dict)
+                    for cmd in child_cmds
+                )
+            )
             for task in self:
                 bypass_auto = bool(self.env.context.get('allow_fsm_parent_status_auto'))
                 in_fsm_controllers = self.env.user.has_group('reza_field_service_buttons.group_fsm_controllers')
@@ -238,16 +250,18 @@ class ProjectTask(models.Model):
                     and task.child_ids
                     and not bypass_auto
                     and not in_fsm_controllers
+                    and not is_inline_subtask_update
                     and not all_subtasks_closed
                 )
 
                 _logger.info(
                     "FSM_GUARD evaluate task_id=%s is_fsm=%s child_count=%s all_subtasks_closed=%s "
-                    "bypass_auto=%s in_fsm_controllers=%s -> block=%s",
+                    "inline_subtask_update=%s bypass_auto=%s in_fsm_controllers=%s -> block=%s",
                     task.id,
                     task.is_fsm,
                     len(task.child_ids),
                     all_subtasks_closed,
+                    is_inline_subtask_update,
                     bypass_auto,
                     in_fsm_controllers,
                     should_block,
@@ -285,6 +299,26 @@ class ProjectTask(models.Model):
                 task.sudo().with_context(mail_notrack=True).write({
                     'worksheet_customer_notified': True,
                 })
+
+        # Post rep completion/cancellation note on parent chatter for subtask updates.
+        if 'state' in vals:
+            for task in self:
+                old_state = previous_state.get(task.id)
+                if not task.parent_id:
+                    continue
+                if vals.get('state') not in CLOSED_STATES:
+                    continue
+                if old_state == vals.get('state'):
+                    continue
+                state_label = 'Done' if vals.get('state') == '1_done' else 'Cancelled'
+                rep_name = self.env.user.name
+                task.parent_id.message_post(
+                    body=_(
+                        'Sub-task <b>%s</b> was marked <b>%s</b> by <b>%s</b>.'
+                    ) % (task.display_name, state_label, rep_name),
+                    message_type='comment',
+                    subtype_xmlid='mail.mt_comment',
+                )
 
         # After saving, recompute parent state for any affected sub-task
         if changed_state_fields:
