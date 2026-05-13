@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="field_service_buttons_assets" model="ir.asset">
+        <field name="name">Field Service Buttons CSS</field>
+        <field name="bundle">web.assets_backend</field>
+        <field name="path">field_service_buttons/static/src/css/field_service_buttons.css</field>
+    </record>
+</odoo>

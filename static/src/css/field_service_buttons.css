@@ -1,0 +1,24 @@
+/* Hide state options not in our allowed 3: In Progress, Cancelled, Done */
+/* The state_selection widget renders all Odoo states — we hide the unwanted ones */
+
+/* Hide the waiting/blocked dot states (grey dots) */
+.o_status_bubble,
+.o_field_state_selection .o_status:not([data-value="01_in_progress"]):not([data-value="1_done"]):not([data-value="1_canceled"]) {
+    display: none !important;
+}
+
+/* Hide unwanted dropdown items in the state picker popup */
+.o_state_selection_list .o_item_option[data-value="02_changes_requested"],
+.o_state_selection_list .o_item_option[data-value="03_approved"],
+.o_state_selection_list .o_item_option[data-value="04_waiting_normal"],
+.o_state_selection_list .o_item_option[data-value="1_blocked"],
+.o_state_selection_list .o_item_option[data-value="normal"],
+.o_state_selection_list .o_item_option[data-value="blocked"],
+.o_state_selection_list .o_item_option[data-value="done"] {
+    display: none !important;
+}
+
+/* Also hide the divider/gap between groups if all items in a group are hidden */
+.o_state_selection_list hr {
+    display: none !important;
+}
