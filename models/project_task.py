@@ -241,29 +241,31 @@ class ProjectTask(models.Model):
             )
             for task in self:
                 bypass_auto = bool(self.env.context.get('allow_fsm_parent_status_auto'))
-                in_fsm_controllers = self.env.user.has_group('reza_field_service_buttons.group_fsm_controllers')
                 all_subtasks_closed = bool(task.child_ids) and all(
                     child.state in CLOSED_STATES for child in task.child_ids
+                )
+                requested_state = vals.get('state') if isinstance(vals, dict) else False
+                valid_parent_finalize = bool(
+                    all_subtasks_closed and requested_state in CLOSED_STATES
                 )
                 should_block = bool(
                     task.is_fsm
                     and task.child_ids
                     and not bypass_auto
-                    and not in_fsm_controllers
                     and not is_inline_subtask_update
-                    and not all_subtasks_closed
+                    and not valid_parent_finalize
                 )
 
                 _logger.info(
                     "FSM_GUARD evaluate task_id=%s is_fsm=%s child_count=%s all_subtasks_closed=%s "
-                    "inline_subtask_update=%s bypass_auto=%s in_fsm_controllers=%s -> block=%s",
+                    "inline_subtask_update=%s bypass_auto=%s valid_parent_finalize=%s -> block=%s",
                     task.id,
                     task.is_fsm,
                     len(task.child_ids),
                     all_subtasks_closed,
                     is_inline_subtask_update,
                     bypass_auto,
-                    in_fsm_controllers,
+                    valid_parent_finalize,
                     should_block,
                 )
 
@@ -314,7 +316,7 @@ class ProjectTask(models.Model):
                 rep_name = self.env.user.name
                 task.parent_id.message_post(
                     body=_(
-                        'Sub-task <b>%s</b> was marked <b>%s</b> by <b>%s</b>.'
+                        'Sub-task "%s" was marked %s by %s.'
                     ) % (task.display_name, state_label, rep_name),
                     message_type='comment',
                     subtype_xmlid='mail.mt_comment',
