@@ -11,8 +11,9 @@ class MailMessage(models.Model):
         if not task_msgs:
             return self.browse()
         task_ids = list({m.res_id for m in task_msgs})
+        tasks = self.env['project.task'].browse(task_ids).exists()
         fsm_task_ids = set(
-            self.env['project.task'].browse(task_ids).exists().filtered('is_fsm').ids
+            tasks.filtered(lambda t: bool(t.is_fsm or t.project_id.is_fsm)).ids
         )
         return task_msgs.filtered(lambda m: m.res_id in fsm_task_ids)
 
