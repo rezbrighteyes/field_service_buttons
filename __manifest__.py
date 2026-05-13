@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # noop: rebuild trigger
+# noop: rebuild trigger 2
 {
     'name': 'Reza Field Service Buttons',
     'version': '19.0.1.0.0',
