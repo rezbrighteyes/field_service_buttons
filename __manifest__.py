@@ -21,6 +21,7 @@
             'reza_field_service_buttons/static/src/css/field_service_buttons.css',
             'reza_field_service_buttons/static/src/js/list_delete_confirm.js',
             'reza_field_service_buttons/static/src/js/lightbox_image.js',
+            'reza_field_service_buttons/static/src/js/state_selection_filter.js',
         ],
     },
     'installable': True,
