@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
+import logging
+
 from odoo import models, fields, api, _
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
+
+_logger = logging.getLogger(__name__)
 
 # Field Service project stage IDs (project.task.type)
 # 11 = In Progress, 12 = Done, 13 = Cancelled
@@ -154,7 +158,10 @@ class ProjectTask(models.Model):
             changed['stage_id'] = new_stage_id
 
         if changed:
-            parent.sudo().write(changed)
+            parent.with_context(
+                allow_fsm_parent_status_auto=True,
+                fsm_status_source='subtask_rollup',
+            ).sudo().write(changed)
 
             # Notify managers if >50% sub-tasks canceled but run is Done
             if new_state == '1_done' and canceled_count > total / 2:
@@ -186,20 +193,41 @@ class ProjectTask(models.Model):
 
     def write(self, vals):
         state_fields = {'state', 'stage_id', 'kanban_state'}
-        if state_fields & vals.keys():
+        changed_state_fields = sorted(state_fields & set(vals.keys()))
+        if changed_state_fields:
+            _logger.info(
+                "FSM_GUARD write called user=%s(%s) su=%s task_ids=%s fields=%s vals=%s context=%s",
+                self.env.user.login,
+                self.env.user.id,
+                self.env.su,
+                self.ids,
+                changed_state_fields,
+                vals,
+                dict(self.env.context),
+            )
             for task in self:
-                # Block manual state/stage change on FSM tasks for non-managers.
-                # Managers keep override capability.
-                if task.is_fsm:
-                    is_manager = self.env.user.has_group('project.group_project_manager')
-                    if not is_manager:
-                        raise UserError(_(
-                            'You cannot change the status of a field service task manually. '
-                            'It will update automatically when sub-tasks are completed.'
-                        ))
+                bypass_auto = bool(self.env.context.get('allow_fsm_parent_status_auto'))
+                is_manager = self.env.user.has_group('project.group_project_manager')
+                should_block = bool(task.is_fsm and task.child_ids and not is_manager and not bypass_auto)
+
+                _logger.info(
+                    "FSM_GUARD evaluate task_id=%s is_fsm=%s child_count=%s is_manager=%s bypass_auto=%s -> block=%s",
+                    task.id,
+                    task.is_fsm,
+                    len(task.child_ids),
+                    is_manager,
+                    bypass_auto,
+                    should_block,
+                )
+
+                if should_block:
+                    raise ValidationError(_(
+                        'You cannot manually change the status or stage of a parent field service task. '
+                        'It updates automatically from sub-task completion.'
+                    ))
         result = super().write(vals)
         # After saving, recompute parent state for any affected sub-task
-        if state_fields & vals.keys():
+        if changed_state_fields:
             for task in self:
                 task._update_parent_state()
         return result
