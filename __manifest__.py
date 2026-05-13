@@ -11,6 +11,7 @@
         'account',
     ],
     'data': [
+        'security/fsm_security.xml',
         'security/ir.model.access.csv',
         'views/project_task_views.xml',
         'views/assets.xml',

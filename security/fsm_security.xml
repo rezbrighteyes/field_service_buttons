@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="group_fsm_controllers" model="res.groups">
+        <field name="name">FSM Controllers</field>
+        <field name="category_id" ref="base.module_category_services_field_service_management"/>
+        <field name="implied_ids" eval="[(4, ref('project.group_project_user'))]"/>
+    </record>
+
+    <!-- Internal users who are NOT in FSM Controllers can only access non-FSM tasks -->
+    <record id="rule_project_task_internal_non_fsm_only" model="ir.rule">
+        <field name="name">Project Task: Internal Non-FSM Only</field>
+        <field name="model_id" ref="project.model_project_task"/>
+        <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+        <field name="domain_force">[('is_fsm', '=', False)]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+
+    <!-- FSM Controllers can access FSM tasks -->
+    <record id="rule_project_task_fsm_controllers_fsm_only" model="ir.rule">
+        <field name="name">Project Task: FSM Controllers FSM Access</field>
+        <field name="model_id" ref="project.model_project_task"/>
+        <field name="groups" eval="[(4, ref('reza_field_service_buttons.group_fsm_controllers'))]"/>
+        <field name="domain_force">[('is_fsm', '=', True)]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+</odoo>
+
