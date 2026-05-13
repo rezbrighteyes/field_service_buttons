@@ -2,8 +2,31 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 
+# Field Service project stage IDs (project.task.type)
+# 11 = In Progress, 12 = Done, 13 = Cancelled
+FSM_STAGE_IN_PROGRESS = 11
+FSM_STAGE_DONE = 12
+FSM_STAGE_CANCELLED = 13
+
+STATE_TO_STAGE = {
+    '01_in_progress': FSM_STAGE_IN_PROGRESS,
+    '1_done':         FSM_STAGE_DONE,
+    '1_canceled':     FSM_STAGE_CANCELLED,
+}
+
+
 class ProjectTask(models.Model):
     _inherit = 'project.task'
+
+    # Restrict state dropdown to only 3 options
+    state = fields.Selection(
+        selection=[
+            ('01_in_progress', 'In Progress'),
+            ('1_canceled',     'Cancelled'),
+            ('1_done',         'Done'),
+        ],
+        string='Status',
+    )
 
     # ─────────────────────────────────────────────
     # Existing buttons (unchanged)
@@ -52,11 +75,11 @@ class ProjectTask(models.Model):
         }
 
     # ─────────────────────────────────────────────
-    # Auto-update parent state when sub-task changes
+    # Auto-update parent state + stage when sub-task changes
     # ─────────────────────────────────────────────
 
     def _update_parent_state(self):
-        """Recompute parent task state based on all sub-task states."""
+        """Recompute parent task state and stage based on all sub-task states."""
         parent = self.parent_id
         if not parent:
             return
@@ -71,7 +94,6 @@ class ProjectTask(models.Model):
         closed = canceled | done
         canceled_count = len(canceled)
 
-        # Determine new parent state
         if len(closed) < total:
             new_state = '01_in_progress'
         elif canceled_count == total:
@@ -79,11 +101,19 @@ class ProjectTask(models.Model):
         else:
             new_state = '1_done'
 
-        # Only write if state actually changed (avoids recursion)
-        if parent.state != new_state:
-            parent.sudo().write({'state': new_state})
+        new_stage_id = STATE_TO_STAGE.get(new_state)
 
-            # If more than half are canceled but we're marking Done, notify managers
+        # Only write if something actually changed
+        changed = {}
+        if parent.state != new_state:
+            changed['state'] = new_state
+        if new_stage_id and parent.stage_id.id != new_stage_id:
+            changed['stage_id'] = new_stage_id
+
+        if changed:
+            parent.sudo().write(changed)
+
+            # Notify managers if >50% sub-tasks canceled but run is Done
             if new_state == '1_done' and canceled_count > total / 2:
                 group = self.env.ref('project.group_project_manager')
                 self.env.cr.execute("""
@@ -115,7 +145,7 @@ class ProjectTask(models.Model):
         state_fields = {'state', 'stage_id', 'kanban_state'}
         if state_fields & vals.keys():
             for task in self:
-                # Block manual state change on parent tasks for non-managers
+                # Block manual state/stage change on parent tasks for non-managers
                 if task.child_ids:
                     is_manager = self.env.user.has_group('project.group_project_manager')
                     if not is_manager:
