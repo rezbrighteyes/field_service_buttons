@@ -13,12 +13,14 @@
     'data': [
         'security/ir.model.access.csv',
         'views/project_task_views.xml',
+        'views/assets.xml',
         'views/liaise_worksheet_report.xml',
     ],
     'assets': {
         'web.assets_backend': [
-            'reza_field_service_buttons/static/src/js/list_delete_confirm.js',
-            'reza_field_service_buttons/static/src/js/lightbox_image.js',
+            'field_service_buttons/static/src/css/field_service_buttons.css',
+            'field_service_buttons/static/src/js/list_delete_confirm.js',
+            'field_service_buttons/static/src/js/lightbox_image.js',
         ],
     },
     'installable': True,
