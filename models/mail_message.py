@@ -35,3 +35,7 @@ class MailMessage(models.Model):
     def unlink(self):
         self._check_fsm_message_change_allowed()
         return super().unlink()
+
+    def update_content(self, body, attachment_ids=None):
+        self._check_fsm_message_change_allowed()
+        return super().update_content(body, attachment_ids=attachment_ids)
