@@ -39,6 +39,11 @@ class ProjectTask(models.Model):
             '04_waiting_normal': 'set default',
         },
     )
+    worksheet_customer_notified = fields.Boolean(
+        string='Worksheet Completion Notified to Customer',
+        default=False,
+        copy=False,
+    )
 
     # ─────────────────────────────────────────────
     # Override _compute_state to respect subtask completion
@@ -183,6 +188,16 @@ class ProjectTask(models.Model):
                         message_type='comment',
                         subtype_xmlid='mail.mt_comment',
                     )
+                # Also leave an audit note on the customer chatter when available.
+                if parent.partner_id:
+                    parent.partner_id.message_post(
+                        body=_(
+                            'Field Service run <b>%s</b> completed with %d of %d sub-tasks canceled '
+                            '(over 50%% canceled).'
+                        ) % (parent.display_name, canceled_count, total),
+                        message_type='comment',
+                        subtype_xmlid='mail.mt_comment',
+                    )
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -192,6 +207,10 @@ class ProjectTask(models.Model):
         return tasks
 
     def write(self, vals):
+        previous_fsm_done = {}
+        if 'fsm_done' in vals and vals.get('fsm_done'):
+            previous_fsm_done = {task.id: bool(task.fsm_done) for task in self}
+
         state_fields = {'state', 'stage_id', 'kanban_state'}
         changed_state_fields = sorted(state_fields & set(vals.keys()))
         if changed_state_fields:
@@ -228,6 +247,28 @@ class ProjectTask(models.Model):
                         'It updates automatically from sub-task completion.'
                     ))
         result = super().write(vals)
+
+        # Post worksheet completion to customer chatter once per task.
+        if 'fsm_done' in vals and vals.get('fsm_done'):
+            for task in self:
+                was_done = previous_fsm_done.get(task.id, False)
+                if was_done:
+                    continue
+                if task.worksheet_customer_notified:
+                    continue
+                if not task.partner_id:
+                    continue
+                task.partner_id.message_post(
+                    body=_(
+                        'Worksheet completed for Field Service task <b>%s</b>.'
+                    ) % (task.display_name,),
+                    message_type='comment',
+                    subtype_xmlid='mail.mt_comment',
+                )
+                task.sudo().with_context(mail_notrack=True).write({
+                    'worksheet_customer_notified': True,
+                })
+
         # After saving, recompute parent state for any affected sub-task
         if changed_state_fields:
             for task in self:
