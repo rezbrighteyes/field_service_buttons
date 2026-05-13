@@ -186,7 +186,7 @@ class ProjectTask(models.Model):
                         ) % (canceled_count, total),
                         partner_ids=partner_ids,
                         message_type='comment',
-                        subtype_xmlid='mail.mt_comment',
+                        subtype_xmlid='mail.mt_note',
                     )
                 # Also leave an audit note on the customer chatter when available.
                 if parent.partner_id:
@@ -196,7 +196,7 @@ class ProjectTask(models.Model):
                             '(over 50%% canceled).'
                         ) % (parent.display_name, canceled_count, total),
                         message_type='comment',
-                        subtype_xmlid='mail.mt_comment',
+                        subtype_xmlid='mail.mt_note',
                     )
 
     @api.model_create_multi
@@ -296,7 +296,7 @@ class ProjectTask(models.Model):
                         'Worksheet completed for Field Service task <b>%s</b>.'
                     ) % (task.display_name,),
                     message_type='comment',
-                    subtype_xmlid='mail.mt_comment',
+                    subtype_xmlid='mail.mt_note',
                 )
                 task.sudo().with_context(mail_notrack=True).write({
                     'worksheet_customer_notified': True,
@@ -319,11 +319,48 @@ class ProjectTask(models.Model):
                         'Sub-task "%s" was marked %s by %s.'
                     ) % (task.display_name, state_label, rep_name),
                     message_type='comment',
-                    subtype_xmlid='mail.mt_comment',
+                    subtype_xmlid='mail.mt_note',
                 )
+                customer = task.partner_id or task.parent_id.partner_id
+                if customer:
+                    customer.with_user(SUPERUSER_ID).sudo().message_post(
+                        body=_(
+                            'Sub-task "%s" was marked %s by %s.'
+                        ) % (task.display_name, state_label, rep_name),
+                        message_type='comment',
+                        subtype_xmlid='mail.mt_note',
+                    )
 
         # After saving, recompute parent state for any affected sub-task
         if changed_state_fields:
             for task in self:
                 task._update_parent_state()
         return result
+
+    def message_post(self, **kwargs):
+        message = super().message_post(**kwargs)
+        if len(self) != 1:
+            return message
+
+        task = self
+        if not task.parent_id:
+            return message
+
+        body = kwargs.get('body')
+        if not body:
+            return message
+
+        subtype_xmlid = kwargs.get('subtype_xmlid') or 'mail.mt_note'
+        if subtype_xmlid not in ('mail.mt_note', 'mail.mt_comment'):
+            return message
+
+        customer = task.partner_id or task.parent_id.partner_id
+        if not customer:
+            return message
+
+        customer.with_user(SUPERUSER_ID).sudo().message_post(
+            body=_('Rep update on sub-task "%s": %s') % (task.display_name, body),
+            message_type='comment',
+            subtype_xmlid='mail.mt_note',
+        )
+        return message
