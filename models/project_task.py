@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo import models, fields, api, _
+from odoo import models, api, _
 from odoo.exceptions import UserError
 
 # Field Service project stage IDs (project.task.type)
@@ -19,34 +19,6 @@ CLOSED_STATES = {'1_done', '1_canceled'}
 
 class ProjectTask(models.Model):
     _inherit = 'project.task'
-
-    # Computed proxy field used in the FSM form view.
-    # The base widget (project_task_state_selection) hardcodes all 6 state options
-    # regardless of what the server sends, so we expose a separate field whose
-    # selection metadata contains only the 3 allowed FSM states.  The base
-    # state_selection widget reads its option list from the server field metadata,
-    # so it will show exactly these 3 items.
-    fsm_state = fields.Selection(
-        selection=[
-            ('01_in_progress', 'In Progress'),
-            ('1_canceled',     'Cancelled'),
-            ('1_done',         'Done'),
-        ],
-        string='Status',
-        compute='_compute_fsm_state',
-        inverse='_set_fsm_state',
-    )
-
-    _VALID_FSM_STATES = frozenset(['01_in_progress', '1_canceled', '1_done'])
-
-    @api.depends('state')
-    def _compute_fsm_state(self):
-        for task in self:
-            task.fsm_state = task.state if task.state in self._VALID_FSM_STATES else '01_in_progress'
-
-    def _set_fsm_state(self):
-        for task in self:
-            task.state = task.fsm_state
 
     # ─────────────────────────────────────────────
     # Override _compute_state to respect subtask completion

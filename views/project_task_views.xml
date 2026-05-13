@@ -1,10 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!--
-        Record 1: Add Order and Credit Note buttons to the FSM task form.
-        Inherits industry_fsm.view_task_form2_inherit so that action_fsm_validate
-        (the "Mark as Done" button added by that view) is available as an anchor.
-    -->
     <record id="view_task_form_fsm_reza_buttons" model="ir.ui.view">
         <field name="name">project.task.form.fsm.reza.buttons</field>
         <field name="model">project.task</field>
@@ -26,45 +21,6 @@
                     icon="fa-file-text-o"
                 />
             </button>
-        </field>
-    </record>
-
-    <!--
-        Record 2: Filter the state dropdown on FSM tasks to 3 options only.
-
-        Root cause: the project_task_state_selection widget (used in view_task_form2)
-        hardcodes all 6 state values in its get options() getter and ignores the
-        server-side field selection.  The base state_selection widget reads its option
-        list directly from the server field metadata, so swapping to it on a field
-        whose selection contains only 3 entries is the correct server-side fix.
-
-        We expose fsm_state (a computed proxy with a 3-item selection) and swap it in
-        only for is_fsm tasks, leaving non-FSM project tasks untouched.
-    -->
-    <record id="view_task_form2_fsm_state_filter" model="ir.ui.view">
-        <field name="name">project.task.form2.fsm.state.filter</field>
-        <field name="model">project.task</field>
-        <field name="inherit_id" ref="project.view_task_form2"/>
-        <field name="arch" type="xml">
-            <!-- Ensure is_fsm is available for invisible conditions -->
-            <field name="is_closed" invisible="1" position="after">
-                <field name="is_fsm" invisible="1"/>
-            </field>
-            <!--
-                The active-task state widget lives inside:
-                  <div class="d-flex justify-content-end o_state_container" ...>
-                Replace it with the original (shown for non-FSM) or fsm_state (FSM only).
-            -->
-            <xpath expr="//div[contains(@class,'justify-content-end') and contains(@class,'o_state_container')]/field[@name='state']" position="replace">
-                <field name="state"
-                       widget="project_task_state_selection"
-                       class="o_task_state_widget"
-                       invisible="is_fsm"/>
-                <field name="fsm_state"
-                       widget="state_selection"
-                       class="o_task_state_widget"
-                       invisible="not is_fsm"/>
-            </xpath>
         </field>
     </record>
 </odoo>
