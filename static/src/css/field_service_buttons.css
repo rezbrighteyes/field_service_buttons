@@ -1,28 +1,14 @@
-/* Hide unwanted state dropdown items - target by actual Odoo class names */
+/* Hide unwanted state dropdown items - scoped to FSM task views only */
+/* .o_fsm_task is added by industry_fsm to the task form */
 
-/* Hide the exclamation/changes-requested item */
-.o-dropdown-item:has(.o_status_changes_requested) {
+.o_fsm_task .o-dropdown-item:has(.o_status_changes_requested),
+.o_fsm_task .o-dropdown-item:has(.o_status_approved),
+.o_fsm_task .o-dropdown-item:has(.o_status_waiting),
+.o_fsm_task .o-dropdown-item:has(.o_status:not(.o_status_green):not(.text-danger)) {
     display: none !important;
 }
 
-/* Hide the approved (thumbs up) item */
-.o-dropdown-item:has(.o_status_approved) {
-    display: none !important;
-}
-
-/* Hide the waiting/blocked item */
-.o-dropdown-item:has(.o_status_waiting) {
-    display: none !important;
-}
-
-/* Hide the grey dot (normal/in-progress bubble) - keep only our 3 */
-/* The green dot is o_status_green (Done), red X is Cancelled, grey is unwanted */
-.o-dropdown-item:has(.o_status:not(.o_status_green):not(.text-danger)) {
-    display: none !important;
-}
-
-/* Hide any hr dividers inside the state dropdown */
-.o_field_state_selection .dropdown-menu hr,
-.o_state_selection_list hr {
+/* Hide hr dividers inside the state dropdown on FSM tasks */
+.o_fsm_task .o_field_state_selection .dropdown-menu hr {
     display: none !important;
 }
