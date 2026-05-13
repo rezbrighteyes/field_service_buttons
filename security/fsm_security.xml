@@ -2,7 +2,6 @@
 <odoo>
     <record id="group_fsm_controllers" model="res.groups">
         <field name="name">FSM Controllers</field>
-        <field name="category_id" ref="base.module_category_services_field_service_management"/>
         <field name="implied_ids" eval="[(4, ref('project.group_project_user'))]"/>
     </record>
 
@@ -30,4 +29,3 @@
         <field name="perm_unlink" eval="True"/>
     </record>
 </odoo>
-
