@@ -337,6 +337,38 @@ class ProjectTask(models.Model):
                 task._update_parent_state()
         return result
 
+    def _message_update_content(self, message, body, attachment_ids=None, **kwargs):
+        """
+        Block FSM task chatter edits and content-removal for non-controllers.
+
+        The /mail/message/update_content HTTP controller does `message = message.sudo()`
+        before calling this method, so message.env.su is True and our write() guard in
+        MailMessage is bypassed.  The thread (self) is NOT sudo'd — self.env.user is the
+        real requesting user — so we can enforce the check here.
+
+        Both "edit message" (body != '') and "remove content" / "This message has been
+        removed" (body == '') flow through this method.
+        """
+        self.ensure_one()
+        if self.is_fsm or (self.project_id and self.project_id.is_fsm):
+            if not self.env.su and not self.env.user.has_group(
+                'reza_field_service_buttons.group_fsm_controllers'
+            ):
+                _logger.warning(
+                    "FSM_CHATTER_BLOCK _message_update_content denied: "
+                    "user=%s(id=%s) message_id=%s model=project.task res_id=%s",
+                    self.env.user.login,
+                    self.env.user.id,
+                    message.id,
+                    self.id,
+                )
+                raise ValidationError(_(
+                    'You cannot edit or delete chatter messages on Field Service tasks.'
+                ))
+        return super()._message_update_content(
+            message, body, attachment_ids=attachment_ids, **kwargs
+        )
+
     def message_post(self, **kwargs):
         message = super().message_post(**kwargs)
         if len(self) != 1:
