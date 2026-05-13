@@ -39,6 +39,16 @@ class TestProjectTaskStatusGuard(TransactionCase):
         with self.assertRaises(ValidationError):
             self.parent.with_user(self.non_manager).write({'state': '1_done'})
 
+    def test_manager_blocked_on_parent_manual_state_change(self):
+        manager = self.env['res.users'].create({
+            'name': 'FSM Manager',
+            'login': 'fsm_manager_test',
+            'email': 'fsm_manager_test@example.com',
+            'groups_id': [(6, 0, [self.manager_group.id])],
+        })
+        with self.assertRaises(ValidationError):
+            self.parent.with_user(manager).write({'state': '1_done'})
+
     def test_auto_update_flow_allowed_for_parent(self):
         self.child.with_user(self.non_manager).write({'state': '1_done'})
         self.parent.invalidate_recordset(['state'])
@@ -51,4 +61,3 @@ class TestProjectTaskStatusGuard(TransactionCase):
         })
         leaf.with_user(self.non_manager).write({'state': '1_done'})
         self.assertEqual(leaf.state, '1_done')
-

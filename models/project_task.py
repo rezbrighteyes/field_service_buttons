@@ -207,15 +207,13 @@ class ProjectTask(models.Model):
             )
             for task in self:
                 bypass_auto = bool(self.env.context.get('allow_fsm_parent_status_auto'))
-                is_manager = self.env.user.has_group('project.group_project_manager')
-                should_block = bool(task.is_fsm and task.child_ids and not is_manager and not bypass_auto)
+                should_block = bool(task.is_fsm and task.child_ids and not bypass_auto)
 
                 _logger.info(
-                    "FSM_GUARD evaluate task_id=%s is_fsm=%s child_count=%s is_manager=%s bypass_auto=%s -> block=%s",
+                    "FSM_GUARD evaluate task_id=%s is_fsm=%s child_count=%s bypass_auto=%s -> block=%s",
                     task.id,
                     task.is_fsm,
                     len(task.child_ids),
-                    is_manager,
                     bypass_auto,
                     should_block,
                 )
