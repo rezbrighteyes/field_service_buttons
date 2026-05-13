@@ -20,29 +20,21 @@ CLOSED_STATES = {'1_done', '1_canceled'}
 class ProjectTask(models.Model):
     _inherit = 'project.task'
 
-    # Backward-compatibility field for previously deployed view customizations.
-    # Some databases may still contain inherited views referencing `fsm_state`.
-    fsm_state = fields.Selection(
-        selection=[
-            ('01_in_progress', 'In Progress'),
-            ('1_canceled', 'Cancelled'),
-            ('1_done', 'Done'),
+    # Restore the three selection values that were deleted from ir.model.fields.selection
+    # by a previous upgrade that overrode state with a 3-item list.
+    # selection_add re-inserts them; ondelete guards records if this module is later removed.
+    state = fields.Selection(
+        selection_add=[
+            ('02_changes_requested', 'Changes Requested'),
+            ('03_approved', 'Approved'),
+            ('04_waiting_normal', 'Waiting'),
         ],
-        string='Status',
-        compute='_compute_fsm_state',
-        inverse='_set_fsm_state',
+        ondelete={
+            '02_changes_requested': 'set default',
+            '03_approved': 'set default',
+            '04_waiting_normal': 'set default',
+        },
     )
-
-    _VALID_FSM_STATES = frozenset(['01_in_progress', '1_canceled', '1_done'])
-
-    @api.depends('state')
-    def _compute_fsm_state(self):
-        for task in self:
-            task.fsm_state = task.state if task.state in self._VALID_FSM_STATES else '01_in_progress'
-
-    def _set_fsm_state(self):
-        for task in self:
-            task.state = task.fsm_state
 
     # ─────────────────────────────────────────────
     # Override _compute_state to respect subtask completion
