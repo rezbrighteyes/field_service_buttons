@@ -19,7 +19,7 @@ class MailMessage(models.Model):
     def _check_fsm_message_change_allowed(self):
         if self.env.su:
             return
-        if self.env.user.has_group('project.group_project_manager'):
+        if self.env.user.has_group('reza_field_service_buttons.group_fsm_controllers'):
             return
         blocked = self._fsm_task_messages()
         if blocked:
@@ -34,4 +34,3 @@ class MailMessage(models.Model):
     def unlink(self):
         self._check_fsm_message_change_allowed()
         return super().unlink()
-

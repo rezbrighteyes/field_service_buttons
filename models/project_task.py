@@ -358,8 +358,9 @@ class ProjectTask(models.Model):
         if not customer:
             return message
 
+        rep_name = self.env.user.name
         customer.with_user(SUPERUSER_ID).sudo().message_post(
-            body=_('Rep update on sub-task "%s": %s') % (task.display_name, body),
+            body=_('Rep update from %s on sub-task "%s": %s') % (rep_name, task.display_name, body),
             message_type='comment',
             subtype_xmlid='mail.mt_note',
         )
