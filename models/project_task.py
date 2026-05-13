@@ -14,6 +14,8 @@ STATE_TO_STAGE = {
     '1_canceled':     FSM_STAGE_CANCELLED,
 }
 
+CLOSED_STATES = {'1_done', '1_canceled'}
+
 
 class ProjectTask(models.Model):
     _inherit = 'project.task'
@@ -27,6 +29,41 @@ class ProjectTask(models.Model):
         ],
         string='Status',
     )
+
+    # ─────────────────────────────────────────────
+    # Override _compute_state to respect subtask completion
+    # ─────────────────────────────────────────────
+
+    @api.depends('stage_id', 'depend_on_ids.state', 'child_ids.state')
+    def _compute_state(self):
+        for task in self:
+            # If this is a parent task and all subtasks are closed, determine state from subtasks
+            if task.child_ids:
+                subtasks = task.child_ids
+                total = len(subtasks)
+                closed = subtasks.filtered(lambda t: t.state in CLOSED_STATES)
+                if len(closed) == total:
+                    canceled = subtasks.filtered(lambda t: t.state == '1_canceled')
+                    if len(canceled) == total:
+                        task.state = '1_canceled'
+                    else:
+                        task.state = '1_done'
+                    continue
+                # Not all closed — fall through to in_progress
+                task.state = '01_in_progress'
+                continue
+
+            # Original Odoo logic for tasks without subtasks
+            dependent_open_tasks = []
+            if task.allow_task_dependencies:
+                dependent_open_tasks = [
+                    t for t in task.depend_on_ids if t.state not in CLOSED_STATES
+                ]
+            if dependent_open_tasks:
+                if task.state not in CLOSED_STATES:
+                    task.state = '04_waiting_normal'
+            elif task.state not in CLOSED_STATES:
+                task.state = '01_in_progress'
 
     # ─────────────────────────────────────────────
     # Existing buttons (unchanged)
