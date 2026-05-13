@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 
-from odoo import models, fields, api, _
+from odoo import models, fields, api, _, SUPERUSER_ID
 from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
@@ -179,9 +179,9 @@ class ProjectTask(models.Model):
                 """, [group.id])
                 partner_ids = [row[0] for row in self.env.cr.fetchall()]
                 if partner_ids:
-                    parent.message_post(
+                    parent.with_user(SUPERUSER_ID).sudo().message_post(
                         body=_(
-                            '⚠️ Run completed but <b>%d of %d</b> sub-tasks were canceled. '
+                            'Run completed, but %d of %d sub-tasks were cancelled. '
                             'Please review this run.'
                         ) % (canceled_count, total),
                         partner_ids=partner_ids,
@@ -190,7 +190,7 @@ class ProjectTask(models.Model):
                     )
                 # Also leave an audit note on the customer chatter when available.
                 if parent.partner_id:
-                    parent.partner_id.message_post(
+                    parent.partner_id.with_user(SUPERUSER_ID).sudo().message_post(
                         body=_(
                             'Field Service run <b>%s</b> completed with %d of %d sub-tasks canceled '
                             '(over 50%% canceled).'
