@@ -324,7 +324,7 @@ class ProjectTask(models.Model):
                 customer = task.partner_id or task.parent_id.partner_id
                 if customer:
                     customer.with_user(SUPERUSER_ID).sudo().message_post(
-                        body=_(
+                        body='<!--fsm_audit_mirror-->' + _(
                             'Sub-task "%s" was marked %s by %s.'
                         ) % (task.display_name, state_label, rep_name),
                         message_type='comment',
@@ -337,7 +337,7 @@ class ProjectTask(models.Model):
                 task._update_parent_state()
         return result
 
-    def _message_update_content(self, message, body, attachment_ids=None, **kwargs):
+    def _message_update_content(self, message, *, body, attachment_ids=None, **kwargs):
         """
         Block FSM task chatter edits and content-removal for non-controllers.
 
@@ -366,7 +366,7 @@ class ProjectTask(models.Model):
                     'You cannot edit or delete chatter messages on Field Service tasks.'
                 ))
         return super()._message_update_content(
-            message, body, attachment_ids=attachment_ids, **kwargs
+            message, body=body, attachment_ids=attachment_ids, **kwargs
         )
 
     def message_post(self, **kwargs):
@@ -392,7 +392,9 @@ class ProjectTask(models.Model):
 
         rep_name = self.env.user.name
         customer.with_user(SUPERUSER_ID).sudo().message_post(
-            body=_('Rep update from %s on sub-task "%s": %s') % (rep_name, task.display_name, body),
+            body='<!--fsm_audit_mirror-->' + _(
+                'Rep update from %s on sub-task "%s": %s'
+            ) % (rep_name, task.display_name, body),
             message_type='comment',
             subtype_xmlid='mail.mt_note',
         )

@@ -64,6 +64,12 @@ class TestFSMChatterLock(TransactionCase):
             message_type='comment',
             subtype_xmlid='mail.mt_note',
         )
+        self.partner = self.env['res.partner'].create({'name': 'FSM Customer'})
+        self.customer_audit_message = self.partner.with_user(self.controller).message_post(
+            body='<!--fsm_audit_mirror-->Rep update from Test Rep on sub-task "X": hi',
+            message_type='comment',
+            subtype_xmlid='mail.mt_note',
+        )
 
     # ── write() path (direct ORM) ─────────────────────────────────────────
 
@@ -113,28 +119,39 @@ class TestFSMChatterLock(TransactionCase):
         """Edit message body via the RPC path must be blocked."""
         with self.assertRaises(ValidationError):
             self.task.with_user(self.non_controller)._message_update_content(
-                self.message, '<p>edited body</p>'
+                self.message, body='<p>edited body</p>'
             )
 
     def test_non_controller_cannot_remove_via_update_content(self):
         """Empty-body 'remove content' (This message has been removed) must be blocked."""
         with self.assertRaises(ValidationError):
             self.task.with_user(self.non_controller)._message_update_content(
-                self.message, ''
+                self.message, body=''
             )
 
     def test_controller_can_edit_via_update_content(self):
         self.task.with_user(self.controller)._message_update_content(
-            self.message, '<p>controller edited</p>'
+            self.message, body='<p>controller edited</p>'
         )
 
     def test_superuser_can_edit_via_update_content(self):
         self.task.sudo()._message_update_content(
-            self.message, '<p>su edited</p>'
+            self.message, body='<p>su edited</p>'
         )
 
     def test_non_fsm_task_update_content_not_blocked(self):
         """_message_update_content on a non-FSM task must not be affected."""
         self.non_fsm_task.with_user(self.non_controller)._message_update_content(
-            self.non_fsm_message, '<p>regular edit</p>'
+            self.non_fsm_message, body='<p>regular edit</p>'
+        )
+
+    def test_non_controller_cannot_edit_customer_audit_message_via_update_content(self):
+        with self.assertRaises(ValidationError):
+            self.partner.with_user(self.non_controller)._message_update_content(
+                self.customer_audit_message, body='edited'
+            )
+
+    def test_controller_can_edit_customer_audit_message_via_update_content(self):
+        self.partner.with_user(self.controller)._message_update_content(
+            self.customer_audit_message, body='edited by controller'
         )

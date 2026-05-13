@@ -21,6 +21,13 @@ class MailMessage(models.Model):
         )
         return task_msgs.filtered(lambda m: m.res_id in fsm_task_ids)
 
+    def _fsm_customer_audit_messages(self):
+        """Return mirrored FSM customer-audit messages on res.partner chatter."""
+        partner_msgs = self.filtered(lambda m: m.model == 'res.partner' and m.body)
+        if not partner_msgs:
+            return self.browse()
+        return partner_msgs.filtered(lambda m: '<!--fsm_audit_mirror-->' in (m.body or ''))
+
     def _check_fsm_chatter_mutation(self, method_name):
         """
         Raise ValidationError if the current user cannot mutate FSM task chatter.
@@ -36,7 +43,7 @@ class MailMessage(models.Model):
             return
         if self.env.user.has_group('reza_field_service_buttons.group_fsm_controllers'):
             return
-        blocked = self._fsm_task_messages()
+        blocked = self._fsm_task_messages() | self._fsm_customer_audit_messages()
         if blocked:
             for msg in blocked:
                 _logger.warning(
