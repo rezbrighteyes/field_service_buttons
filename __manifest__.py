@@ -18,9 +18,9 @@
     ],
     'assets': {
         'web.assets_backend': [
-            'field_service_buttons/static/src/css/field_service_buttons.css',
-            'field_service_buttons/static/src/js/list_delete_confirm.js',
-            'field_service_buttons/static/src/js/lightbox_image.js',
+            'reza_field_service_buttons/static/src/css/field_service_buttons.css',
+            'reza_field_service_buttons/static/src/js/list_delete_confirm.js',
+            'reza_field_service_buttons/static/src/js/lightbox_image.js',
         ],
     },
     'installable': True,
