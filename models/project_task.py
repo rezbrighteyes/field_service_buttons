@@ -207,14 +207,18 @@ class ProjectTask(models.Model):
             )
             for task in self:
                 bypass_auto = bool(self.env.context.get('allow_fsm_parent_status_auto'))
-                should_block = bool(task.is_fsm and task.child_ids and not bypass_auto)
+                in_fsm_controllers = self.env.user.has_group('reza_field_service_buttons.group_fsm_controllers')
+                should_block = bool(
+                    task.is_fsm and task.child_ids and not bypass_auto and not in_fsm_controllers
+                )
 
                 _logger.info(
-                    "FSM_GUARD evaluate task_id=%s is_fsm=%s child_count=%s bypass_auto=%s -> block=%s",
+                    "FSM_GUARD evaluate task_id=%s is_fsm=%s child_count=%s bypass_auto=%s in_fsm_controllers=%s -> block=%s",
                     task.id,
                     task.is_fsm,
                     len(task.child_ids),
                     bypass_auto,
+                    in_fsm_controllers,
                     should_block,
                 )
 
