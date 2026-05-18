@@ -17,6 +17,7 @@
         'security/ir.model.access.csv',
         'views/project_task_views.xml',
         'views/assets.xml',
+        'views/liaise_worksheet_report.xml',
     ],
     'assets': {
         'web.assets_backend': [
