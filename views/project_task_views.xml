@@ -24,6 +24,14 @@
                     icon="fa-file-text-o"
                 />
             </button>
+            <field name="planned_date_begin" position="after">
+                <field name="fsm_next_visit_date"/>
+                <field name="fsm_next_visit_date_manual" invisible="1"/>
+                <field
+                    name="fsm_cancellation_reason"
+                    placeholder="Required before cancelling a sub-task"
+                />
+            </field>
         </field>
     </record>
 </odoo>

@@ -4,6 +4,7 @@ import logging
 from odoo import models, fields, api, _, SUPERUSER_ID
 from odoo.exceptions import UserError, ValidationError
 from odoo.tools import html2plaintext
+from dateutil.relativedelta import relativedelta
 from markupsafe import Markup
 
 _logger = logging.getLogger(__name__)
@@ -56,6 +57,88 @@ class ProjectTask(models.Model):
         default=False,
         copy=False,
     )
+    fsm_next_visit_date = fields.Date(
+        string='Next Visit Date',
+        copy=False,
+        tracking=True,
+        help='Next planned customer visit. Defaults from the task schedule plus the repeat interval, and can be manually overridden.',
+    )
+    fsm_next_visit_date_manual = fields.Boolean(
+        string='Next Visit Date Manually Set',
+        default=False,
+        copy=False,
+    )
+    fsm_cancellation_reason = fields.Text(
+        string='Cancellation Reason',
+        copy=False,
+        tracking=True,
+        help='Required when a Field Service sub-task is cancelled.',
+    )
+
+    def _fsm_get_datetime_value(self, field_names):
+        self.ensure_one()
+        for field_name in field_names:
+            if field_name in self._fields and self[field_name]:
+                return self[field_name]
+        return False
+
+    def _fsm_get_repeat_interval_unit(self):
+        self.ensure_one()
+        interval = False
+        unit = False
+
+        if 'repeat_interval' in self._fields and self.repeat_interval:
+            interval = self.repeat_interval
+        if 'repeat_unit' in self._fields and self.repeat_unit:
+            unit = self.repeat_unit
+
+        recurrence = False
+        if 'recurrence_id' in self._fields:
+            recurrence = self.recurrence_id
+        if recurrence:
+            if not interval and 'repeat_interval' in recurrence._fields:
+                interval = recurrence.repeat_interval
+            if not unit and 'repeat_unit' in recurrence._fields:
+                unit = recurrence.repeat_unit
+
+        return int(interval or 6), (unit or 'week')
+
+    def _fsm_get_next_visit_base_date(self):
+        self.ensure_one()
+        return self._fsm_get_datetime_value((
+            'planned_date_end',
+            'date_end',
+            'date_deadline',
+            'planned_date_begin',
+        ))
+
+    def _fsm_calculate_next_visit_date(self):
+        self.ensure_one()
+        base_date = self._fsm_get_next_visit_base_date()
+        if not base_date:
+            return False
+
+        interval, unit = self._fsm_get_repeat_interval_unit()
+        unit = (unit or 'week').lower()
+        if unit in ('day', 'days'):
+            delta = relativedelta(days=interval)
+        elif unit in ('month', 'months'):
+            delta = relativedelta(months=interval)
+        elif unit in ('year', 'years'):
+            delta = relativedelta(years=interval)
+        else:
+            delta = relativedelta(weeks=interval)
+        return fields.Date.to_date(base_date + delta)
+
+    def _fsm_sync_next_visit_date(self):
+        for task in self:
+            if task.fsm_next_visit_date_manual:
+                continue
+            next_visit_date = task._fsm_calculate_next_visit_date()
+            if next_visit_date and task.fsm_next_visit_date != next_visit_date:
+                task.with_context(fsm_sync_next_visit_date=True).sudo().write({
+                    'fsm_next_visit_date': next_visit_date,
+                })
 
     # ─────────────────────────────────────────────
     # Override _compute_state to respect subtask completion
@@ -221,12 +304,40 @@ class ProjectTask(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        for vals in vals_list:
+            if vals.get('fsm_next_visit_date') and 'fsm_next_visit_date_manual' not in vals:
+                vals['fsm_next_visit_date_manual'] = True
         tasks = super().create(vals_list)
         for task in tasks:
+            task._fsm_sync_next_visit_date()
             task._update_parent_state()
         return tasks
 
     def write(self, vals):
+        if 'fsm_next_visit_date' in vals and not self.env.context.get('fsm_sync_next_visit_date'):
+            vals = dict(vals, fsm_next_visit_date_manual=True)
+
+        if vals.get('state') == '1_canceled':
+            for task in self:
+                if not task.parent_id or task.state == '1_canceled':
+                    continue
+                reason = vals.get('fsm_cancellation_reason') or task.fsm_cancellation_reason
+                if not (reason or '').strip():
+                    raise ValidationError(_(
+                        'Please enter a cancellation reason before cancelling this sub-task.'
+                    ))
+
+        if 'fsm_cancellation_reason' in vals and not self.env.su:
+            can_manage_cancel_reason = self.env.user.has_group(
+                'reza_field_service_buttons.group_fsm_controllers'
+            )
+            for task in self:
+                same_write_is_cancelling = vals.get('state') == '1_canceled' and task.state != '1_canceled'
+                if task.parent_id and task.state == '1_canceled' and not same_write_is_cancelling and not can_manage_cancel_reason:
+                    raise ValidationError(_(
+                        'You cannot change the cancellation reason after this sub-task has been cancelled.'
+                    ))
+
         previous_fsm_done = {}
         if 'fsm_done' in vals and vals.get('fsm_done'):
             previous_fsm_done = {task.id: bool(task.fsm_done) for task in self}
@@ -336,19 +447,25 @@ class ProjectTask(models.Model):
                     continue
                 state_label = 'Done' if vals.get('state') == '1_done' else 'Cancelled'
                 rep_name = self.env.user.name
+                reason = (task.fsm_cancellation_reason or '').strip()
+                parent_body = _('Sub-task "%s" was marked %s by %s.') % (
+                    task.display_name, state_label, rep_name
+                )
+                customer_body = parent_body
+                if vals.get('state') == '1_canceled' and reason:
+                    parent_body = _(
+                        'Sub-task "%s" was marked Cancelled by %s. Reason: %s'
+                    ) % (task.display_name, rep_name, reason)
+                    customer_body = parent_body
                 task.parent_id.message_post(
-                    body=_(
-                        'Sub-task "%s" was marked %s by %s.'
-                    ) % (task.display_name, state_label, rep_name),
+                    body=parent_body,
                     message_type='comment',
                     subtype_xmlid='mail.mt_note',
                 )
                 customer = task.partner_id or task.parent_id.partner_id
                 if customer:
                     _m = customer.with_user(SUPERUSER_ID).sudo().message_post(
-                        body=_(
-                            'Sub-task "%s" was marked %s by %s.'
-                        ) % (task.display_name, state_label, rep_name),
+                        body=customer_body,
                         message_type='comment',
                         subtype_xmlid='mail.mt_note',
                     )
@@ -356,6 +473,18 @@ class ProjectTask(models.Model):
                         _m.write({'x_is_fsm_mirror': True})
 
         # After saving, recompute parent state for any affected sub-task
+        if {
+            'planned_date_begin',
+            'planned_date_end',
+            'date_begin',
+            'date_end',
+            'date_deadline',
+            'repeat_interval',
+            'repeat_unit',
+            'recurrence_id',
+        } & set(vals.keys()):
+            self._fsm_sync_next_visit_date()
+
         if changed_state_fields:
             for task in self:
                 task._update_parent_state()
