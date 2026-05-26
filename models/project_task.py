@@ -3,6 +3,8 @@ import logging
 
 from odoo import models, fields, api, _, SUPERUSER_ID
 from odoo.exceptions import UserError, ValidationError
+from odoo.tools import html2plaintext
+from markupsafe import Markup
 
 _logger = logging.getLogger(__name__)
 
@@ -19,6 +21,16 @@ STATE_TO_STAGE = {
 }
 
 CLOSED_STATES = {'1_done', '1_canceled'}
+
+
+def _fsm_chatter_plaintext(body):
+    if not body:
+        return ''
+    return (html2plaintext(body) or '').strip()
+
+
+def _is_fsm_automatic_notification(body):
+    return bool(body and 'o_mail_notification' in body)
 
 
 class ProjectTask(models.Model):
@@ -191,10 +203,16 @@ class ProjectTask(models.Model):
                 # Also leave an audit note on the customer chatter when available.
                 if parent.partner_id:
                     _m = parent.partner_id.with_user(SUPERUSER_ID).sudo().message_post(
-                        body=_(
-                            'Field Service run <b>%s</b> completed with %d of %d sub-tasks canceled '
-                            '(over 50%% canceled).'
-                        ) % (parent.display_name, canceled_count, total),
+                        body=Markup(
+                            _(
+                                'Field Service run <b>{task}</b> completed with {canceled} of '
+                                '{total} sub-tasks canceled (over 50% canceled).'
+                            )
+                        ).format(
+                            task=parent.display_name,
+                            canceled=canceled_count,
+                            total=total,
+                        ),
                         message_type='comment',
                         subtype_xmlid='mail.mt_note',
                     )
@@ -294,9 +312,9 @@ class ProjectTask(models.Model):
                 if not task.partner_id:
                     continue
                 _m = task.partner_id.message_post(
-                    body=_(
-                        'Worksheet completed for Field Service task <b>%s</b>.'
-                    ) % (task.display_name,),
+                    body=Markup(
+                        _('Worksheet completed for Field Service task <b>{task}</b>.')
+                    ).format(task=task.display_name),
                     message_type='comment',
                     subtype_xmlid='mail.mt_note',
                 )
@@ -387,6 +405,8 @@ class ProjectTask(models.Model):
         body = kwargs.get('body')
         if not body:
             return message
+        if _is_fsm_automatic_notification(body):
+            return message
 
         subtype_xmlid = kwargs.get('subtype_xmlid') or 'mail.mt_note'
         if subtype_xmlid not in ('mail.mt_note', 'mail.mt_comment'):
@@ -397,10 +417,17 @@ class ProjectTask(models.Model):
             return message
 
         rep_name = self.env.user.name
+        clean_body = _fsm_chatter_plaintext(body)
+        if not clean_body:
+            return message
         _m = customer.with_user(SUPERUSER_ID).sudo().message_post(
-            body=_(
-                'Rep update from %s on sub-task "%s": %s'
-            ) % (rep_name, task.display_name, body),
+            body=Markup(
+                _('Rep update from {rep} on sub-task "{task}": {body}')
+            ).format(
+                rep=rep_name,
+                task=task.display_name,
+                body=clean_body,
+            ),
             message_type='comment',
             subtype_xmlid='mail.mt_note',
         )
