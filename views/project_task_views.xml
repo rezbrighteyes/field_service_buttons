@@ -29,6 +29,7 @@
                 <field name="fsm_next_visit_date_manual" invisible="1"/>
                 <field
                     name="fsm_cancellation_reason"
+                    invisible="not parent_id"
                     placeholder="Required before cancelling a sub-task"
                 />
             </field>
