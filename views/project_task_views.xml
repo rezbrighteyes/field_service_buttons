@@ -24,7 +24,7 @@
                     icon="fa-file-text-o"
                 />
             </button>
-            <field name="planned_date_begin" position="after">
+            <field name="partner_id" position="after">
                 <field name="fsm_next_visit_date"/>
                 <field name="fsm_next_visit_date_manual" invisible="1"/>
                 <field
