@@ -490,6 +490,18 @@ class ProjectTask(models.Model):
                 task._update_parent_state()
         return result
 
+    def unlink(self):
+        blocked_tasks = self.filtered(
+            lambda task: task.is_fsm or (task.project_id and task.project_id.is_fsm)
+        )
+        if blocked_tasks and not self.env.su and not self.env.user.has_group(
+            'reza_field_service_buttons.group_fsm_controllers'
+        ):
+            raise ValidationError(_(
+                'Only FSM Controllers can delete Field Service tasks or runs.'
+            ))
+        return super().unlink()
+
     def _message_update_content(self, message, *, body, attachment_ids=None, **kwargs):
         """
         Block FSM task chatter edits and content-removal for non-controllers.

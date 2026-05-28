@@ -126,3 +126,27 @@ class TestProjectTaskStatusGuard(TransactionCase):
             'fsm_cancellation_reason': 'manager corrected reason',
         })
         self.assertEqual(self.child.fsm_cancellation_reason, 'manager corrected reason')
+
+    def test_non_controller_cannot_delete_fsm_run_or_subtask(self):
+        with self.assertRaises(ValidationError):
+            self.parent.with_user(self.non_manager).unlink()
+        with self.assertRaises(ValidationError):
+            self.child.with_user(self.non_manager).unlink()
+
+    def test_project_manager_cannot_delete_fsm_run(self):
+        manager = self.env['res.users'].create({
+            'name': 'FSM Delete Project Manager',
+            'login': 'fsm_delete_project_manager_test',
+            'email': 'fsm_delete_project_manager_test@example.com',
+            'groups_id': [(6, 0, [self.manager_group.id])],
+        })
+        with self.assertRaises(ValidationError):
+            self.parent.with_user(manager).unlink()
+
+    def test_controller_can_delete_fsm_run(self):
+        run = self.Task.create({
+            'name': 'Controller Delete Run',
+            'project_id': self.project.id,
+        })
+        run.with_user(self.controller).unlink()
+        self.assertFalse(run.exists())
