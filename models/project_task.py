@@ -318,6 +318,8 @@ class ProjectTask(models.Model):
             'partner_id': partner.id,
             'partner_invoice_id': partner.id,
             'partner_shipping_id': partner.id,
+            'user_id': self.env.user.id,
+            'company_id': self.company_id.id or self.env.company.id,
             'origin': self.name,
             'note': _('Created from Field Service task: %s') % self.name,
         })

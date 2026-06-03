@@ -77,6 +77,12 @@ class TestProjectTaskStatusGuard(TransactionCase):
         leaf.with_user(self.non_manager).write({'state': '1_done'})
         self.assertEqual(leaf.state, '1_done')
 
+    def test_order_button_assigns_current_user_as_salesperson(self):
+        result = self.child.action_create_sale_order()
+        order = self.env['sale.order'].browse(result['res_id'])
+        self.assertEqual(order.user_id, self.env.user)
+        self.assertEqual(order.company_id, self.child.company_id or self.env.company)
+
     def test_next_visit_date_defaults_from_deadline_plus_six_weeks(self):
         task = self.Task.create({
             'name': 'Next Visit Task',
