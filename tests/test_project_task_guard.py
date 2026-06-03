@@ -144,7 +144,23 @@ class TestProjectTaskStatusGuard(TransactionCase):
     def test_subtask_reminds_to_mark_done_after_worksheet(self):
         self.child.write({'fsm_done': True})
         self.child.invalidate_recordset(['fsm_customer_activity_summary'])
-        self.assertIn('mark this sub-task Done', self.child.fsm_customer_activity_summary)
+        self.assertIn('Mark this sub-task Done', self.child.fsm_customer_activity_summary)
+
+    def test_subtask_banner_includes_task_activity_after_worksheet(self):
+        self.env['mail.activity'].create({
+            'res_model_id': self.env['ir.model']._get_id('project.task'),
+            'res_id': self.child.id,
+            'activity_type_id': self.env.ref('mail.mail_activity_data_todo').id,
+            'summary': 'test',
+            'date_deadline': '2026-06-05',
+            'user_id': self.env.user.id,
+        })
+
+        self.child.write({'fsm_done': True})
+        self.child.invalidate_recordset(['fsm_customer_activity_summary'])
+        self.assertIn('Task reminder', self.child.fsm_customer_activity_summary)
+        self.assertIn('test', self.child.fsm_customer_activity_summary)
+        self.assertIn('Mark this sub-task Done', self.child.fsm_customer_activity_summary)
 
     def test_cancelling_subtask_requires_reason(self):
         with self.assertRaises(ValidationError):

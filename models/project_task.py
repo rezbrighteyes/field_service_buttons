@@ -82,11 +82,59 @@ class ProjectTask(models.Model):
         compute_sudo=True,
     )
 
+    def _fsm_has_completed_worksheet(self):
+        self.ensure_one()
+        if self.fsm_done:
+            return True
+
+        worksheet_model_names = [
+            model_name
+            for model_name in self.env.registry.models
+            if model_name.startswith('x_project_task_worksheet_template_')
+        ]
+        for model_name in worksheet_model_names:
+            Worksheet = self.env[model_name].sudo()
+            if 'x_project_task_id' not in Worksheet._fields:
+                continue
+            if Worksheet.search_count([('x_project_task_id', '=', self.id)], limit=1):
+                return True
+        return False
+
+    def _fsm_format_activity_summary(self, activity, label):
+        self.ensure_one()
+        today = fields.Date.context_today(self)
+        if activity.date_deadline == today:
+            due = _('today')
+        elif activity.date_deadline == today + relativedelta(days=1):
+            due = _('tomorrow')
+        elif activity.date_deadline:
+            due = format_date(self.env, activity.date_deadline)
+        else:
+            due = _('no due date')
+
+        summary = activity.summary or activity.activity_type_id.display_name or _('Activity')
+        if activity.date_deadline and activity.date_deadline < today:
+            label = _('Overdue %(label)s') % {'label': label}
+        return _('%(label)s: %(summary)s due %(due)s') % {
+            'label': label,
+            'summary': summary,
+            'due': due,
+        }
+
     @api.depends('partner_id', 'parent_id', 'state', 'fsm_done')
     def _compute_fsm_customer_activity_summary(self):
         Activity = self.env['mail.activity'].sudo()
         partners = self.mapped('partner_id')
+        task_activities_by_task = {}
         activities_by_partner = {}
+        if self:
+            task_activities = Activity.search([
+                ('res_model', '=', 'project.task'),
+                ('res_id', 'in', self.ids),
+            ], order='date_deadline asc, id asc')
+            for activity in task_activities:
+                task_activities_by_task.setdefault(activity.res_id, Activity)
+                task_activities_by_task[activity.res_id] |= activity
         if partners:
             activities = Activity.search([
                 ('res_model', '=', 'res.partner'),
@@ -97,16 +145,22 @@ class ProjectTask(models.Model):
                 activities_by_partner[activity.res_id] |= activity
 
         for task in self:
-            if task.parent_id and not task.fsm_done:
-                task.fsm_customer_activity_summary = _(
-                    'Reminder: complete the worksheet before finishing this visit.'
-                )
-                continue
+            reminders = []
 
-            if task.parent_id and task.state not in CLOSED_STATES:
-                task.fsm_customer_activity_summary = _(
-                    'Reminder: mark this sub-task Done when the visit is finished.'
-                )
+            task_activities = task_activities_by_task.get(task.id, Activity)
+            if task_activities:
+                reminders.append(task._fsm_format_activity_summary(
+                    task_activities[0], _('Task reminder')
+                ))
+
+            if task.parent_id:
+                if not task._fsm_has_completed_worksheet():
+                    reminders.append(_('Complete the worksheet before finishing this visit.'))
+                elif task.state not in CLOSED_STATES:
+                    reminders.append(_('Mark this sub-task Done when the visit is finished.'))
+
+            if reminders:
+                task.fsm_customer_activity_summary = ' '.join(reminders)
                 continue
 
             activities = activities_by_partner.get(task.partner_id.id, Activity)
@@ -115,24 +169,16 @@ class ProjectTask(models.Model):
                 continue
 
             first = activities[0]
-            due = format_date(self.env, first.date_deadline) if first.date_deadline else _('No due date')
-            summary = first.summary or first.activity_type_id.display_name or _('Activity')
-            is_overdue = bool(first.date_deadline and first.date_deadline < fields.Date.context_today(task))
-            label = _('Overdue customer reminder') if is_overdue else _('Customer reminder')
             if len(activities) == 1:
-                task.fsm_customer_activity_summary = _('%(label)s: %(summary)s due %(due)s') % {
-                    'label': label,
-                    'summary': summary,
-                    'due': due,
-                }
+                task.fsm_customer_activity_summary = task._fsm_format_activity_summary(
+                    first, _('Customer reminder')
+                )
             else:
                 task.fsm_customer_activity_summary = _(
-                    '%(count)s customer reminders. Next: %(label)s: %(summary)s due %(due)s'
+                    '%(count)s customer reminders. Next: %(reminder)s'
                 ) % {
                     'count': len(activities),
-                    'label': label,
-                    'summary': summary,
-                    'due': due,
+                    'reminder': task._fsm_format_activity_summary(first, _('Customer reminder')),
                 }
 
     @api.model
