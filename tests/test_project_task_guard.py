@@ -95,6 +95,33 @@ class TestProjectTaskStatusGuard(TransactionCase):
         task.write({'date_deadline': '2026-06-05'})
         self.assertEqual(task.fsm_next_visit_date, date(2026, 7, 17))
 
+    def test_subtask_search_matches_customer_details(self):
+        customer = self.Partner.create({
+            'name': 'Liberty Service Station',
+            'city': 'Margate',
+            'phone': '0730001111',
+        })
+        subtask = self.Task.create({
+            'name': 'North Run Visit',
+            'project_id': self.project.id,
+            'parent_id': self.parent.id,
+            'partner_id': customer.id,
+        })
+
+        for search_term in ('Margate', 'Liberty', '0730001111'):
+            matches = self.Task.search([
+                ('parent_id', '=', self.parent.id),
+                ('display_name', 'ilike', search_term),
+            ])
+            self.assertIn(subtask, matches)
+
+        name_search_matches = self.Task.name_search(
+            'Margate',
+            args=[('parent_id', '=', self.parent.id)],
+            limit=10,
+        )
+        self.assertIn(subtask.id, [task_id for task_id, _name in name_search_matches])
+
     def test_cancelling_subtask_requires_reason(self):
         with self.assertRaises(ValidationError):
             self.child.with_user(self.non_manager).write({'state': '1_canceled'})

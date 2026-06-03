@@ -3,6 +3,7 @@ import logging
 
 from odoo import models, fields, api, _, SUPERUSER_ID
 from odoo.exceptions import UserError, ValidationError
+from odoo.osv import expression
 from odoo.tools import html2plaintext
 from dateutil.relativedelta import relativedelta
 from markupsafe import Markup
@@ -74,6 +75,29 @@ class ProjectTask(models.Model):
         tracking=True,
         help='Required when a Field Service sub-task is cancelled.',
     )
+
+    @api.model
+    def _search_display_name(self, operator, value):
+        domain = super()._search_display_name(operator, value)
+        if not value or operator in expression.NEGATIVE_TERM_OPERATORS:
+            return domain
+
+        extra_domains = [
+            [(field_name, operator, value)]
+            for field_name in (
+                'partner_id.name',
+                'partner_id.complete_name',
+                'partner_id.city',
+                'partner_id.street',
+                'partner_id.street2',
+                'partner_id.ref',
+                'partner_id.phone',
+                'partner_id.mobile',
+                'partner_id.email',
+                'parent_id.name',
+            )
+        ]
+        return expression.OR([domain] + extra_domains)
 
     def _fsm_get_datetime_value(self, field_names):
         self.ensure_one()
