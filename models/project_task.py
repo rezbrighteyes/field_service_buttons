@@ -5,6 +5,7 @@ from odoo import models, fields, api, _, SUPERUSER_ID
 from odoo.exceptions import UserError, ValidationError
 from odoo.osv import expression
 from odoo.tools import html2plaintext
+from odoo.tools import format_date
 from dateutil.relativedelta import relativedelta
 from markupsafe import Markup
 
@@ -75,6 +76,64 @@ class ProjectTask(models.Model):
         tracking=True,
         help='Required when a Field Service sub-task is cancelled.',
     )
+    fsm_customer_activity_summary = fields.Char(
+        string='Field Service Reminder',
+        compute='_compute_fsm_customer_activity_summary',
+        compute_sudo=True,
+    )
+
+    @api.depends('partner_id', 'parent_id', 'state', 'fsm_done')
+    def _compute_fsm_customer_activity_summary(self):
+        Activity = self.env['mail.activity'].sudo()
+        partners = self.mapped('partner_id')
+        activities_by_partner = {}
+        if partners:
+            activities = Activity.search([
+                ('res_model', '=', 'res.partner'),
+                ('res_id', 'in', partners.ids),
+            ], order='date_deadline asc, id asc')
+            for activity in activities:
+                activities_by_partner.setdefault(activity.res_id, Activity)
+                activities_by_partner[activity.res_id] |= activity
+
+        for task in self:
+            if task.parent_id and not task.fsm_done:
+                task.fsm_customer_activity_summary = _(
+                    'Reminder: complete the worksheet before finishing this visit.'
+                )
+                continue
+
+            if task.parent_id and task.state not in CLOSED_STATES:
+                task.fsm_customer_activity_summary = _(
+                    'Reminder: mark this sub-task Done when the visit is finished.'
+                )
+                continue
+
+            activities = activities_by_partner.get(task.partner_id.id, Activity)
+            if not task.partner_id or not activities:
+                task.fsm_customer_activity_summary = False
+                continue
+
+            first = activities[0]
+            due = format_date(self.env, first.date_deadline) if first.date_deadline else _('No due date')
+            summary = first.summary or first.activity_type_id.display_name or _('Activity')
+            is_overdue = bool(first.date_deadline and first.date_deadline < fields.Date.context_today(task))
+            label = _('Overdue customer reminder') if is_overdue else _('Customer reminder')
+            if len(activities) == 1:
+                task.fsm_customer_activity_summary = _('%(label)s: %(summary)s due %(due)s') % {
+                    'label': label,
+                    'summary': summary,
+                    'due': due,
+                }
+            else:
+                task.fsm_customer_activity_summary = _(
+                    '%(count)s customer reminders. Next: %(label)s: %(summary)s due %(due)s'
+                ) % {
+                    'count': len(activities),
+                    'label': label,
+                    'summary': summary,
+                    'due': due,
+                }
 
     @api.model
     def _search_display_name(self, operator, value):

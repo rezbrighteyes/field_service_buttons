@@ -122,6 +122,30 @@ class TestProjectTaskStatusGuard(TransactionCase):
         )
         self.assertIn(subtask.id, [task_id for task_id, _name in name_search_matches])
 
+    def test_subtask_shows_customer_activity_summary(self):
+        self.env['mail.activity'].create({
+            'res_model_id': self.env['ir.model']._get_id('res.partner'),
+            'res_id': self.partner.id,
+            'activity_type_id': self.env.ref('mail.mail_activity_data_todo').id,
+            'summary': 'Check fishing display',
+            'date_deadline': '2026-06-10',
+            'user_id': self.env.user.id,
+        })
+
+        self.child.write({'fsm_done': True, 'state': '1_done'})
+        self.child.invalidate_recordset(['fsm_customer_activity_summary'])
+        self.assertIn('Check fishing display', self.child.fsm_customer_activity_summary)
+        self.assertIn('Customer reminder', self.child.fsm_customer_activity_summary)
+
+    def test_subtask_reminds_to_complete_worksheet_first(self):
+        self.child.invalidate_recordset(['fsm_customer_activity_summary'])
+        self.assertIn('complete the worksheet', self.child.fsm_customer_activity_summary)
+
+    def test_subtask_reminds_to_mark_done_after_worksheet(self):
+        self.child.write({'fsm_done': True})
+        self.child.invalidate_recordset(['fsm_customer_activity_summary'])
+        self.assertIn('mark this sub-task Done', self.child.fsm_customer_activity_summary)
+
     def test_cancelling_subtask_requires_reason(self):
         with self.assertRaises(ValidationError):
             self.child.with_user(self.non_manager).write({'state': '1_canceled'})

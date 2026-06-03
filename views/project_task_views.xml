@@ -24,6 +24,20 @@
                     icon="fa-file-text-o"
                 />
             </button>
+            <xpath expr="//sheet/*[1]" position="before">
+                <div
+                    class="alert alert-warning d-flex align-items-center gap-2 mb-3"
+                    invisible="not parent_id or not fsm_customer_activity_summary"
+                    role="alert"
+                >
+                    <i class="fa fa-bell"/>
+                    <field
+                        name="fsm_customer_activity_summary"
+                        nolabel="1"
+                        readonly="1"
+                    />
+                </div>
+            </xpath>
             <field name="partner_id" position="after">
                 <field name="fsm_next_visit_date"/>
                 <field name="fsm_next_visit_date_manual" invisible="1"/>
