@@ -160,6 +160,7 @@ class TestProjectTaskStatusGuard(TransactionCase):
         self.child.invalidate_recordset(['fsm_customer_activity_summary'])
         self.assertIn('Task reminder', self.child.fsm_customer_activity_summary)
         self.assertIn('test', self.child.fsm_customer_activity_summary)
+        self.assertIn('\n', self.child.fsm_customer_activity_summary)
         self.assertIn('Mark this sub-task Done', self.child.fsm_customer_activity_summary)
 
     def test_cancelling_subtask_requires_reason(self):

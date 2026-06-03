@@ -26,7 +26,7 @@
             </button>
             <xpath expr="//sheet/*[1]" position="before">
                 <div
-                    class="alert alert-warning d-flex align-items-center gap-2 mb-3"
+                    class="alert alert-warning d-flex align-items-start gap-2 mb-3 o_fsm_reminder_banner"
                     invisible="not parent_id or not fsm_customer_activity_summary"
                     role="alert"
                 >

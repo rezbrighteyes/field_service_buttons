@@ -76,7 +76,7 @@ class ProjectTask(models.Model):
         tracking=True,
         help='Required when a Field Service sub-task is cancelled.',
     )
-    fsm_customer_activity_summary = fields.Char(
+    fsm_customer_activity_summary = fields.Text(
         string='Field Service Reminder',
         compute='_compute_fsm_customer_activity_summary',
         compute_sudo=True,
@@ -160,7 +160,7 @@ class ProjectTask(models.Model):
                     reminders.append(_('Mark this sub-task Done when the visit is finished.'))
 
             if reminders:
-                task.fsm_customer_activity_summary = ' '.join(reminders)
+                task.fsm_customer_activity_summary = '\n'.join(reminders)
                 continue
 
             activities = activities_by_partner.get(task.partner_id.id, Activity)

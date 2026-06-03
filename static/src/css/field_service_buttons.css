@@ -1,1 +1,7 @@
-/* Intentionally empty - state filtering handled via JS patch */
+.o_fsm_reminder_banner .o_field_widget {
+    white-space: pre-line;
+}
+
+.o_fsm_reminder_banner .fa {
+    margin-top: 0.2rem;
+}
