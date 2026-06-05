@@ -23,6 +23,11 @@ class CreditReturnWizard(models.TransientModel):
         related="task_id.company_id",
         readonly=True,
     )
+    state = fields.Selection(
+        [("draft", "Draft")],
+        default="draft",
+        readonly=True,
+    )
     allowed_return_location_ids = fields.Many2many(
         "stock.location",
         compute="_compute_allowed_return_location_ids",
