@@ -72,14 +72,13 @@
                 <field name="return_location_id"/>
                 <filter name="credit_return" string="Credit Return" domain="[('outcome', '=', 'credit_return')]"/>
                 <filter name="credit_scrap" string="Credit Scrap" domain="[('outcome', '=', 'credit_scrap')]"/>
-                <filter name="my_returns" string="My Credit Returns" domain="[('user_id', '=', uid)]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_outcome" string="Outcome" context="{'group_by': 'outcome'}"/>
-                    <filter name="group_customer" string="Customer/Store" context="{'group_by': 'partner_id'}"/>
-                    <filter name="group_product" string="Product" context="{'group_by': 'product_id'}"/>
-                    <filter name="group_rep" string="Rep" context="{'group_by': 'user_id'}"/>
-                    <filter name="group_location" string="Location" context="{'group_by': 'return_location_id'}"/>
-                    <filter name="group_date" string="Date" context="{'group_by': 'date'}"/>
+                <group>
+                    <filter name="group_outcome" string="Outcome" domain="[]" context="{'group_by':'outcome'}"/>
+                    <filter name="group_customer" string="Customer/Store" domain="[]" context="{'group_by':'partner_id'}"/>
+                    <filter name="group_product" string="Product" domain="[]" context="{'group_by':'product_id'}"/>
+                    <filter name="group_rep" string="Rep" domain="[]" context="{'group_by':'user_id'}"/>
+                    <filter name="group_location" string="Location" domain="[]" context="{'group_by':'return_location_id'}"/>
+                    <filter name="group_date" string="Date" domain="[]" context="{'group_by':'date'}"/>
                 </group>
             </search>
         </field>
