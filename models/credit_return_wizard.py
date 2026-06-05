@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
-from odoo.osv.expression import Domain
+from odoo.osv import expression
 from odoo.tools import float_compare
 
 
@@ -141,7 +141,10 @@ class CreditReturnWizard(models.TransientModel):
 
     def _get_product_catalog_domain(self):
         domain = super()._get_product_catalog_domain()
-        return domain & Domain("sale_ok", "=", True) & Domain("type", "!=", "service")
+        return expression.AND([
+            domain,
+            [("sale_ok", "=", True), ("type", "!=", "service")],
+        ])
 
     def _get_action_add_from_catalog_extra_context(self):
         context = super()._get_action_add_from_catalog_extra_context()
