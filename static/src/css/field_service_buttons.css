@@ -5,3 +5,13 @@
 .o_fsm_reminder_banner .fa {
     margin-top: 0.2rem;
 }
+
+.o_reza_credit_return_wizard .o_list_renderer {
+    overflow-x: auto;
+}
+
+.o_reza_credit_return_wizard .o_data_cell,
+.o_reza_credit_return_wizard .o_field_widget,
+.o_reza_credit_return_wizard .btn {
+    min-height: 44px;
+}

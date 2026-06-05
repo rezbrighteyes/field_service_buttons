@@ -18,7 +18,7 @@
                 />
                 <button
                     name="action_create_credit_note"
-                    string="Credit Note"
+                    string="Credit / Return"
                     type="object"
                     class="btn-secondary"
                     icon="fa-file-text-o"

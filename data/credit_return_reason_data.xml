@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <record id="credit_reason_customer_return" model="reza.fsm.credit.return.reason">
+        <field name="name">Customer Return</field>
+        <field name="sequence">10</field>
+        <field name="reason_type">credit</field>
+    </record>
+    <record id="credit_reason_damaged" model="reza.fsm.credit.return.reason">
+        <field name="name">Damaged</field>
+        <field name="sequence">20</field>
+        <field name="reason_type">both</field>
+    </record>
+    <record id="credit_reason_wrong_item" model="reza.fsm.credit.return.reason">
+        <field name="name">Wrong Item</field>
+        <field name="sequence">30</field>
+        <field name="reason_type">credit</field>
+    </record>
+    <record id="credit_reason_pricing_issue" model="reza.fsm.credit.return.reason">
+        <field name="name">Pricing Issue</field>
+        <field name="sequence">40</field>
+        <field name="reason_type">credit</field>
+    </record>
+    <record id="credit_reason_short_supplied" model="reza.fsm.credit.return.reason">
+        <field name="name">Short Supplied</field>
+        <field name="sequence">50</field>
+        <field name="reason_type">credit</field>
+    </record>
+    <record id="credit_reason_seasonal_slow_moving" model="reza.fsm.credit.return.reason">
+        <field name="name">Seasonal / Slow Moving</field>
+        <field name="sequence">60</field>
+        <field name="reason_type">credit</field>
+    </record>
+    <record id="credit_reason_unsaleable" model="reza.fsm.credit.return.reason">
+        <field name="name">Unsaleable</field>
+        <field name="sequence">70</field>
+        <field name="reason_type">scrap</field>
+    </record>
+    <record id="credit_reason_other" model="reza.fsm.credit.return.reason">
+        <field name="name">Other</field>
+        <field name="sequence">99</field>
+        <field name="reason_type">both</field>
+        <field name="requires_note">1</field>
+    </record>
+</odoo>

@@ -337,19 +337,15 @@ class ProjectTask(models.Model):
         partner = self.partner_id
         if not partner:
             raise UserError(_('This task has no customer set. Please set a customer first.'))
-        credit_note = self.env['account.move'].create({
-            'move_type': 'out_refund',
-            'partner_id': partner.id,
-            'invoice_origin': self.name,
-            'narration': _('Created from Field Service task: %s') % self.name,
-        })
         return {
             'type': 'ir.actions.act_window',
-            'name': _('Credit Note'),
-            'res_model': 'account.move',
-            'res_id': credit_note.id,
+            'name': _('Credit / Return'),
+            'res_model': 'reza.fsm.credit.return.wizard',
             'view_mode': 'form',
-            'target': 'current',
+            'target': 'new',
+            'context': {
+                'default_task_id': self.id,
+            },
         }
 
     # ─────────────────────────────────────────────
