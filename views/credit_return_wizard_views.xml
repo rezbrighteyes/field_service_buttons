@@ -17,27 +17,32 @@
                             <field name="allowed_return_location_ids" column_invisible="True"/>
                             <field name="product_id"/>
                             <field name="quantity"/>
-                            <field name="product_uom_id"/>
-                            <field name="price_unit"/>
+                            <field name="product_uom_id" optional="hide"/>
+                            <field name="price_unit" optional="hide"/>
                             <field name="outcome"/>
                             <field
                                 name="return_location_id"
                                 required="outcome == 'credit_return'"
                                 invisible="outcome != 'credit_return'"
                             />
-                            <field name="credit_reason_ids" widget="many2many_tags"/>
+                            <field
+                                name="credit_reason_ids"
+                                widget="many2many_tags"
+                                required="outcome == 'credit_return'"
+                            />
                             <field
                                 name="scrap_reason_id"
+                                required="outcome == 'credit_scrap'"
                                 invisible="outcome != 'credit_scrap'"
                             />
-                            <field name="note"/>
+                            <field name="note" optional="hide"/>
                         </list>
                     </field>
                 </sheet>
                 <footer>
                     <button
                         name="action_create_credit_note"
-                        string="Create Credit Note"
+                        string="Create &amp; Confirm Credit Note"
                         type="object"
                         class="btn-primary"
                     />

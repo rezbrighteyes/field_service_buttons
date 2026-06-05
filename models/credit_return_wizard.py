@@ -113,6 +113,8 @@ class CreditReturnWizard(models.TransientModel):
             })
             move_line.write({"reza_fsm_credit_return_event_id": event.id})
 
+        move.sudo().action_post()
+
         return {
             "type": "ir.actions.act_window",
             "name": _("Credit Note"),
@@ -168,12 +170,12 @@ class CreditReturnWizardLine(models.TransientModel):
         required=True,
         domain=[("type", "!=", "service")],
     )
-    quantity = fields.Float(required=True, default=1.0)
+    quantity = fields.Float(string="Qty", required=True, default=1.0)
     product_uom_id = fields.Many2one(
         "uom.uom",
         string="Unit",
     )
-    price_unit = fields.Float(string="Unit Price")
+    price_unit = fields.Float(string="Price")
     outcome = fields.Selection(
         [
             ("credit_return", "Credit Return"),
@@ -231,6 +233,14 @@ class CreditReturnWizardLine(models.TransientModel):
             if line.outcome == "credit_return" and not line.return_location_id:
                 raise ValidationError(_(
                     "Select a return location for %s."
+                ) % line.product_id.display_name)
+            if line.outcome == "credit_return" and not line.credit_reason_ids:
+                raise ValidationError(_(
+                    "Select at least one credit reason for %s."
+                ) % line.product_id.display_name)
+            if line.outcome == "credit_scrap" and not line.scrap_reason_id:
+                raise ValidationError(_(
+                    "Select a scrap reason for %s."
                 ) % line.product_id.display_name)
             if (
                 line.outcome == "credit_return"
