@@ -76,6 +76,15 @@ class AccountMoveLine(models.Model):
         readonly=True,
     )
 
+    def _get_invoice_report_description(self):
+        self.ensure_one()
+        if self.reza_fsm_credit_return_outcome and self.product_id:
+            return self.product_id.name
+        parent_method = getattr(super(), "_get_invoice_report_description", None)
+        if parent_method:
+            return parent_method()
+        return self.name or ""
+
 
 class CreditReturnEvent(models.Model):
     _inherit = "reza.fsm.credit.return.event"

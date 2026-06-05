@@ -55,6 +55,12 @@
                                 invisible="outcome != 'credit_scrap'"
                             />
                             <field name="note" optional="hide"/>
+                            <button
+                                name="action_duplicate_line"
+                                type="object"
+                                icon="fa-copy"
+                                title="Duplicate line"
+                            />
                         </list>
                     </field>
                 </sheet>

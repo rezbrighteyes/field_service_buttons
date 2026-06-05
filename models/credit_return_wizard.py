@@ -75,24 +75,13 @@ class CreditReturnWizard(models.TransientModel):
         Event = self.env["reza.fsm.credit.return.event"].with_company(self.company_id)
         for wizard_line in lines:
             product_uom = wizard_line.product_uom_id or wizard_line.product_id.uom_id
-            reason_text = ", ".join(wizard_line.credit_reason_ids.mapped("name"))
-            scrap_reason = wizard_line.scrap_reason_id.name if wizard_line.scrap_reason_id else ""
-            outcome_label = dict(wizard_line._fields["outcome"].selection).get(
-                wizard_line.outcome
-            )
-            line_name_parts = [wizard_line.product_id.display_name, outcome_label]
-            if reason_text:
-                line_name_parts.append(_("Reason: %s") % reason_text)
-            if scrap_reason:
-                line_name_parts.append(_("Scrap: %s") % scrap_reason)
-
             move_line = self.env["account.move.line"].with_company(self.company_id).create({
                 "move_id": move.id,
                 "product_id": wizard_line.product_id.id,
                 "quantity": wizard_line.quantity,
                 "product_uom_id": product_uom.id,
                 "price_unit": wizard_line.price_unit,
-                "name": " - ".join(line_name_parts),
+                "name": wizard_line.product_id.display_name,
                 "reza_fsm_credit_return_outcome": wizard_line.outcome,
                 "reza_fsm_credit_return_location_id": wizard_line.return_location_id.id,
                 "reza_fsm_credit_reason_ids": [
@@ -199,16 +188,17 @@ class CreditReturnWizard(models.TransientModel):
         if not product:
             return 0
 
-        line = self.line_ids.filtered(
+        lines_for_product = self.line_ids.filtered(
             lambda wizard_line: wizard_line.product_id == product
-        )[:1]
+        )
+        line = lines_for_product[:1]
         quantity = quantity or 0
         if float_compare(
             quantity,
             0.0,
             precision_rounding=product.uom_id.rounding or 0.01,
         ) <= 0:
-            line.unlink()
+            lines_for_product.unlink()
             return product.lst_price
 
         values = {
@@ -307,12 +297,27 @@ class CreditReturnWizardLine(models.TransientModel):
     note = fields.Text()
 
     def _get_product_catalog_lines_data(self, parent_record=None, **kwargs):
-        self.ensure_one()
+        line = self[:1]
         return {
-            "quantity": self.quantity,
-            "price": self.price_unit,
-            "uomDisplayName": self.product_uom_id.display_name,
+            "quantity": sum(self.mapped("quantity")),
+            "price": line.price_unit,
+            "uomDisplayName": line.product_uom_id.display_name,
         }
+
+    def action_duplicate_line(self):
+        for line in self:
+            line.copy({
+                "wizard_id": line.wizard_id.id,
+                "quantity": line.quantity,
+                "product_id": line.product_id.id,
+                "product_uom_id": line.product_uom_id.id,
+                "price_unit": line.price_unit,
+                "outcome": "credit_scrap" if line.outcome == "credit_return" else "credit_return",
+                "return_location_id": False if line.outcome == "credit_return" else line.return_location_id.id,
+                "credit_reason_ids": [(6, 0, [])],
+                "scrap_reason_id": False,
+                "note": False,
+            })
 
     @api.onchange("product_id")
     def _onchange_product_id(self):
