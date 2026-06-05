@@ -321,7 +321,6 @@ class ProjectTask(models.Model):
             'user_id': self.env.user.id,
             'company_id': self.company_id.id or self.env.company.id,
             'origin': self.name,
-            'note': _('Created from Field Service task: %s') % self.name,
         })
         return {
             'type': 'ir.actions.act_window',

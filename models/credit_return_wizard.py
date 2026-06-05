@@ -68,7 +68,6 @@ class CreditReturnWizard(models.TransientModel):
             "company_id": self.company_id.id,
             "invoice_date": fields.Date.context_today(self),
             "invoice_origin": self.task_id.name,
-            "narration": _("Created from Field Service task: %s") % self.task_id.name,
             "reza_fsm_task_id": self.task_id.id,
         })
 
