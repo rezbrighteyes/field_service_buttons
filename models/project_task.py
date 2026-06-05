@@ -337,15 +337,16 @@ class ProjectTask(models.Model):
         partner = self.partner_id
         if not partner:
             raise UserError(_('This task has no customer set. Please set a customer first.'))
+        wizard = self.env['reza.fsm.credit.return.wizard'].create({
+            'task_id': self.id,
+        })
         return {
             'type': 'ir.actions.act_window',
             'name': _('Credit / Return'),
             'res_model': 'reza.fsm.credit.return.wizard',
+            'res_id': wizard.id,
             'view_mode': 'form',
-            'target': 'new',
-            'context': {
-                'default_task_id': self.id,
-            },
+            'target': 'current',
         }
 
     # ─────────────────────────────────────────────

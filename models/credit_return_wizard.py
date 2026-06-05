@@ -131,6 +131,17 @@ class CreditReturnWizard(models.TransientModel):
             "target": "current",
         }
 
+    def action_cancel_credit_return(self):
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Field Service Task"),
+            "res_model": "project.task",
+            "res_id": self.task_id.id,
+            "view_mode": "form",
+            "target": "current",
+        }
+
     def action_add_from_catalog(self):
         self.ensure_one()
         action = super().action_add_from_catalog()
