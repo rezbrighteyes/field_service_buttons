@@ -83,6 +83,8 @@ class CreditReturnEvent(models.Model):
     def _reza_fsm_create_return_stock_move(self):
         self.ensure_one()
         if self.stock_move_id:
+            if self.stock_move_id.state != "done":
+                self._reza_fsm_finalize_return_stock_move(self.stock_move_id)
             return self.stock_move_id
         if not self.return_location_id:
             raise ValidationError(_(
@@ -105,13 +107,41 @@ class CreditReturnEvent(models.Model):
                 self.product_id.display_name
             )
         stock_move = Move.create(move_vals)
+        self._reza_fsm_finalize_return_stock_move(stock_move)
+        self.write({"stock_move_id": stock_move.id})
+        return stock_move
+
+    def _reza_fsm_finalize_return_stock_move(self, stock_move):
+        self.ensure_one()
+        MoveLine = self.env["stock.move.line"].sudo().with_company(self.company_id)
+        move_line_uom_field = (
+            "product_uom_id" if "product_uom_id" in MoveLine._fields else "product_uom"
+        )
         if hasattr(stock_move, "_action_confirm"):
             stock_move._action_confirm()
-        if hasattr(stock_move, "_action_done"):
-            stock_move._action_done()
+        if hasattr(stock_move, "_action_assign"):
+            stock_move._action_assign()
+        qty = stock_move.product_uom_qty
+        if "picked" in stock_move._fields:
+            stock_move.picked = True
+        if stock_move.move_line_ids:
+            for move_line in stock_move.move_line_ids:
+                move_line.quantity = move_line.quantity or qty
+                if "picked" in move_line._fields:
+                    move_line.picked = True
         else:
+            MoveLine.create({
+                "move_id": stock_move.id,
+                "company_id": self.company_id.id,
+                "product_id": stock_move.product_id.id,
+                move_line_uom_field: stock_move.product_uom.id,
+                "quantity": qty,
+                "location_id": stock_move.location_id.id,
+                "location_dest_id": stock_move.location_dest_id.id,
+            })
+        if not hasattr(stock_move, "_action_done"):
             raise UserError(_("Odoo could not finalize the credit return stock move."))
-        self.write({"stock_move_id": stock_move.id})
+        stock_move._action_done()
         return stock_move
 
     def _reza_fsm_get_customer_source_location(self):
