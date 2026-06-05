@@ -41,9 +41,9 @@
     </record>
 
     <record id="rule_credit_return_event_rep_own" model="ir.rule">
-        <field name="name">Credit Return Events: Rep Own</field>
+        <field name="name">Credit Return Events: Field Service Own</field>
         <field name="model_id" ref="model_reza_fsm_credit_return_event"/>
-        <field name="groups" eval="[(4, ref('reza_field_service_buttons.group_liaise_field_rep'))]"/>
+        <field name="groups" eval="[(4, ref('industry_fsm.group_fsm_user'))]"/>
         <field name="domain_force">[('user_id', '=', user.id)]</field>
         <field name="perm_read" eval="True"/>
         <field name="perm_write" eval="True"/>

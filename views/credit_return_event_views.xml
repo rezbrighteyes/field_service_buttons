@@ -109,6 +109,6 @@
         name="Credit Returns"
         parent="industry_fsm.fsm_menu_reporting"
         action="action_reza_fsm_credit_return_event"
-        groups="reza_field_service_buttons.group_liaise_field_rep,reza_field_service_buttons.group_fsm_controllers"
+        groups="industry_fsm.group_fsm_user,reza_field_service_buttons.group_fsm_controllers"
         sequence="25"/>
 </odoo>
