@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
+from odoo.osv.expression import Domain
 from odoo.tools import float_compare
 
 
 class CreditReturnWizard(models.TransientModel):
     _name = "reza.fsm.credit.return.wizard"
+    _inherit = "product.catalog.mixin"
     _description = "Field Service Credit / Return"
 
     task_id = fields.Many2one("project.task", required=True, readonly=True)
@@ -124,6 +126,87 @@ class CreditReturnWizard(models.TransientModel):
             "target": "current",
         }
 
+    def action_add_from_catalog(self):
+        self.ensure_one()
+        action = super().action_add_from_catalog()
+        action["target"] = "new"
+        action["context"] = {
+            **action.get("context", {}),
+            "active_model": self._name,
+            "active_id": self.id,
+            "active_ids": self.ids,
+            "order_id": self.id,
+        }
+        return action
+
+    def _get_product_catalog_domain(self):
+        domain = super()._get_product_catalog_domain()
+        return domain & Domain("sale_ok", "=", True) & Domain("type", "!=", "service")
+
+    def _get_action_add_from_catalog_extra_context(self):
+        context = super()._get_action_add_from_catalog_extra_context()
+        context.update({
+            "product_catalog_currency_id": self.company_id.currency_id.id,
+            "product_catalog_digits": self.line_ids._fields["price_unit"].get_digits(
+                self.env
+            ),
+            "show_sections": False,
+        })
+        return context
+
+    def _get_product_catalog_order_data(self, products, **kwargs):
+        product_catalog = super()._get_product_catalog_order_data(products, **kwargs)
+        for product in products:
+            product_catalog[product.id].update({
+                "price": product.lst_price,
+                "quantity": 0,
+            })
+        return product_catalog
+
+    def _get_product_catalog_record_lines(self, product_ids, **kwargs):
+        grouped_lines = {}
+        for line in self.line_ids.filtered(
+            lambda wizard_line: wizard_line.product_id.id in product_ids
+        ):
+            grouped_lines.setdefault(
+                line.product_id, self.env["reza.fsm.credit.return.wizard.line"]
+            )
+            grouped_lines[line.product_id] |= line
+        return grouped_lines
+
+    def _update_order_line_info(self, product_id, quantity, **kwargs):
+        self.ensure_one()
+        product = self.env["product.product"].browse(product_id).exists()
+        if not product:
+            return 0
+
+        line = self.line_ids.filtered(
+            lambda wizard_line: wizard_line.product_id == product
+        )[:1]
+        quantity = quantity or 0
+        if float_compare(
+            quantity,
+            0.0,
+            precision_rounding=product.uom_id.rounding or 0.01,
+        ) <= 0:
+            line.unlink()
+            return product.lst_price
+
+        values = {
+            "quantity": quantity,
+            "product_uom_id": product.uom_id.id,
+            "price_unit": product.lst_price,
+        }
+        if line:
+            line.write(values)
+        else:
+            self.env["reza.fsm.credit.return.wizard.line"].create({
+                **values,
+                "wizard_id": self.id,
+                "product_id": product.id,
+            })
+        return product.lst_price
+
     def _get_allowed_return_locations(self):
         self.ensure_one()
         Location = self.env["stock.location"]
@@ -203,6 +286,14 @@ class CreditReturnWizardLine(models.TransientModel):
         domain=[("reason_type", "in", ("scrap", "both"))],
     )
     note = fields.Text()
+
+    def _get_product_catalog_lines_data(self, parent_record=None, **kwargs):
+        self.ensure_one()
+        return {
+            "quantity": self.quantity,
+            "price": self.price_unit,
+            "uomDisplayName": self.product_uom_id.display_name,
+        }
 
     @api.onchange("product_id")
     def _onchange_product_id(self):

@@ -12,6 +12,12 @@
                         <field name="company_id"/>
                         <field name="allowed_return_location_ids" invisible="1"/>
                     </group>
+                    <button
+                        name="action_add_from_catalog"
+                        string="Add Products"
+                        type="object"
+                        class="btn-secondary mb-2"
+                    />
                     <field name="line_ids" nolabel="1">
                         <list editable="bottom">
                             <field name="allowed_return_location_ids" column_invisible="True"/>
