@@ -3,16 +3,16 @@
 import { patch } from "@web/core/utils/patch";
 import { ImageField } from "@web/views/fields/image/image_field";
 
-const WORKSHEET_MODEL = "x_project_task_worksheet_template_3";
+const WORKSHEET_MODEL_PREFIX = "x_project_task_worksheet_template_";
 const PHOTO_FIELDS = new Set([
     "x_display_photo",
     "x_display_photo_2",
     "x_display_photo_3",
     "x_display_photo_4",
 ]);
-const MAX_WIDTH = 1600;
-const MAX_HEIGHT = 1200;
-const JPEG_QUALITY = 0.78;
+const MAX_WIDTH = 1200;
+const MAX_HEIGHT = 900;
+const JPEG_QUALITY = 0.7;
 
 function loadImage(dataUrl) {
     return new Promise((resolve, reject) => {
@@ -56,7 +56,8 @@ async function compressPhoto(info) {
 patch(ImageField.prototype, {
     async onFileUploaded(info) {
         const isWorksheetPhoto =
-            this.props.record.resModel === WORKSHEET_MODEL && PHOTO_FIELDS.has(this.props.name);
+            this.props.record.resModel.startsWith(WORKSHEET_MODEL_PREFIX) &&
+            PHOTO_FIELDS.has(this.props.name);
         if (isWorksheetPhoto) {
             try {
                 info = await compressPhoto(info);
