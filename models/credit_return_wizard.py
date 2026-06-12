@@ -140,6 +140,7 @@ class CreditReturnWizard(models.TransientModel):
             "active_id": self.id,
             "active_ids": self.ids,
             "order_id": self.id,
+            "reza_fsm_credit_return_catalog": True,
         }
         return action
 

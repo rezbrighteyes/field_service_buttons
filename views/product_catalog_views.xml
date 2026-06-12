@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="product_catalog_hide_ribbons_for_credit_return" model="ir.ui.view">
+        <field name="name">product.catalog.hide.ribbons.for.credit.return</field>
+        <field name="model">product.product</field>
+        <field name="inherit_id" ref="d3_product_edbert.product_view_kanban_catalog_product"/>
+        <field name="arch" type="xml">
+            <field name="ribbons_ids" position="attributes">
+                <attribute name="invisible">
+                    context.get('reza_fsm_credit_return_catalog')
+                </attribute>
+            </field>
+        </field>
+    </record>
+</odoo>
