@@ -13,7 +13,7 @@
                     name="action_create_sale_order"
                     string="Order"
                     type="object"
-                    class="btn-primary"
+                    class="btn-secondary"
                     icon="fa-shopping-cart"
                 />
                 <button
