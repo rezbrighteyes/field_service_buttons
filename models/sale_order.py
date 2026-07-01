@@ -26,15 +26,19 @@ class SaleOrder(models.Model):
 
     def _reza_fsm_user_can_confirm_main_warehouse(self):
         user = self.env.user
-        if not user.has_group("reza_field_service_buttons.group_liaise_field_rep"):
-            return True
         office_groups = (
             "base.group_system",
             "sales_team.group_sale_manager",
             "reza_field_service_buttons.group_fsm_controllers",
             "reza_intercompany_warehouse.group_intercompany_warehouse_manager",
         )
-        return any(user.has_group(group) for group in office_groups)
+        if any(user.has_group(group) for group in office_groups):
+            return True
+        rep_groups = (
+            "reza_field_service_buttons.group_liaise_field_rep",
+            "industry_fsm.group_fsm_user",
+        )
+        return not any(user.has_group(group) for group in rep_groups)
 
     def _reza_fsm_is_main_warehouse_supply_order(self):
         self.ensure_one()
