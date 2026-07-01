@@ -15,7 +15,7 @@ class SaleOrder(models.Model):
         for order in self:
             if order._reza_fsm_user_can_confirm_main_warehouse():
                 continue
-            if not order._reza_fsm_is_main_warehouse_supply_order():
+            if not order._reza_fsm_needs_office_warehouse_review():
                 continue
             order.message_post(body=_(
                 "Main warehouse confirmation blocked: field reps must leave "
@@ -52,6 +52,13 @@ class SaleOrder(models.Model):
         if selected_location_uses_central_stock:
             return selected_location_uses_central_stock()
         return True
+
+    def _reza_fsm_needs_office_warehouse_review(self):
+        self.ensure_one()
+        if self._reza_fsm_is_main_warehouse_supply_order():
+            return True
+        rep_shortage_lines = getattr(self, "_reza_icw_get_rep_shortage_lines", None)
+        return bool(rep_shortage_lines and rep_shortage_lines())
 
     def _reza_fsm_main_warehouse_block_warning(self):
         return {
