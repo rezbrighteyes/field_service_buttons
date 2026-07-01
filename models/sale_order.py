@@ -28,8 +28,6 @@ class SaleOrder(models.Model):
         user = self.env.user
         office_groups = (
             "base.group_system",
-            "sales_team.group_sale_manager",
-            "reza_field_service_buttons.group_fsm_controllers",
             "reza_intercompany_warehouse.group_intercompany_warehouse_manager",
         )
         if any(user.has_group(group) for group in office_groups):
