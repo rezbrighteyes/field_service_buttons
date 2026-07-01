@@ -6,12 +6,30 @@
         <field name="arch" type="xml">
             <form string="Credit / Return" class="o_reza_credit_return_wizard">
                 <header>
+                    <button
+                        name="action_create_credit_note"
+                        string="Create &amp; Confirm Credit Note"
+                        type="object"
+                        class="btn-secondary"
+                    />
+                    <button
+                        name="action_add_from_catalog"
+                        string="Add Products"
+                        type="object"
+                        class="btn-secondary"
+                    />
                     <widget
                         name="signature"
                         string="Sign"
-                        highlight="1"
+                        highlight="0"
                         invisible="is_signed"
                         full_name="partner_id"
+                    />
+                    <button
+                        name="action_cancel_credit_return"
+                        string="Cancel"
+                        type="object"
+                        class="btn-secondary"
                     />
                 </header>
                 <sheet>
@@ -26,24 +44,6 @@
                         <field name="signature" widget="image" readonly="1" invisible="not signature"/>
                         <field name="allowed_return_location_ids" invisible="1"/>
                     </group>
-                    <button
-                        name="action_add_from_catalog"
-                        string="Add Products"
-                        type="object"
-                        class="btn-secondary mb-2 me-2"
-                    />
-                    <button
-                        name="action_create_credit_note"
-                        string="Create &amp; Confirm Credit Note"
-                        type="object"
-                        class="btn-primary mb-2 me-2"
-                    />
-                    <button
-                        name="action_cancel_credit_return"
-                        string="Cancel"
-                        type="object"
-                        class="btn-secondary mb-2"
-                    />
                     <field name="line_ids" nolabel="1">
                         <list editable="bottom" create="0">
                             <field name="allowed_return_location_ids" column_invisible="True"/>
@@ -77,15 +77,6 @@
                         </list>
                     </field>
                 </sheet>
-                <footer>
-                    <button
-                        name="action_create_credit_note"
-                        string="Create &amp; Confirm Credit Note"
-                        type="object"
-                        class="btn-primary"
-                    />
-                    <button string="Cancel" special="cancel"/>
-                </footer>
             </form>
         </field>
     </record>
