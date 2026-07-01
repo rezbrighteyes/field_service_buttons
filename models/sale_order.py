@@ -58,6 +58,14 @@ class SaleOrder(models.Model):
         rep_shortage_lines = getattr(self, "_reza_icw_get_rep_shortage_lines", None)
         return bool(rep_shortage_lines and rep_shortage_lines())
 
+    def _reza_icw_user_must_select_rep_location(self):
+        if (
+            self._reza_fsm_user_can_confirm_main_warehouse()
+            and self._reza_fsm_is_main_warehouse_supply_order()
+        ):
+            return False
+        return super()._reza_icw_user_must_select_rep_location()
+
     def _reza_fsm_main_warehouse_block_warning(self):
         return {
             "type": "ir.actions.client",
