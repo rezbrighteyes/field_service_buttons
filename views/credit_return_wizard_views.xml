@@ -5,12 +5,25 @@
         <field name="model">reza.fsm.credit.return.wizard</field>
         <field name="arch" type="xml">
             <form string="Credit / Return" class="o_reza_credit_return_wizard">
+                <header>
+                    <widget
+                        name="signature"
+                        string="Sign"
+                        highlight="1"
+                        invisible="is_signed"
+                        full_name="partner_id"
+                    />
+                </header>
                 <sheet>
                     <group>
                         <field name="task_id"/>
                         <field name="partner_id"/>
                         <field name="company_id"/>
                         <field name="state" invisible="1"/>
+                        <field name="is_signed" invisible="1"/>
+                        <field name="signed_by" readonly="1" invisible="not signature"/>
+                        <field name="signed_on" readonly="1" invisible="not signature"/>
+                        <field name="signature" widget="image" readonly="1" invisible="not signature"/>
                         <field name="allowed_return_location_ids" invisible="1"/>
                     </group>
                     <button

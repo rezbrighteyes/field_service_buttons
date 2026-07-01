@@ -10,7 +10,7 @@
                     name="signature"
                     string="Sign"
                     highlight="1"
-                    invisible="is_signed or not reza_fsm_task_id or move_type not in ('out_refund', 'in_refund')"
+                    invisible="is_signed or move_type != 'out_refund'"
                     full_name="partner_id"
                 />
             </xpath>

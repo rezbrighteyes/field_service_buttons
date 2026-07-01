@@ -38,6 +38,34 @@ class CreditReturnWizard(models.TransientModel):
         "wizard_id",
         string="Products",
     )
+    signature = fields.Image(
+        string="Customer Signature",
+        copy=False,
+        max_width=1024,
+        max_height=1024,
+    )
+    signed_by = fields.Char(string="Customer Signed By", copy=False)
+    signed_on = fields.Datetime(string="Customer Signed On", copy=False)
+    is_signed = fields.Boolean(string="Is Signed", compute="_compute_is_signed")
+
+    @api.depends("signature")
+    def _compute_is_signed(self):
+        for wizard in self:
+            wizard.is_signed = bool(wizard.signature)
+
+    def write(self, vals):
+        result = super().write(vals)
+        if vals.get("signature"):
+            for wizard in self.filtered("signature"):
+                update_vals = {}
+                if not wizard.signed_by:
+                    update_vals["signed_by"] = wizard.partner_id.name
+                if not wizard.signed_on:
+                    update_vals["signed_on"] = fields.Datetime.now()
+                if update_vals:
+                    super(CreditReturnWizard, wizard).write(update_vals)
+        return result
+
     @api.depends("task_id", "company_id")
     def _compute_allowed_return_location_ids(self):
         for wizard in self:
@@ -55,6 +83,8 @@ class CreditReturnWizard(models.TransientModel):
         self.ensure_one()
         if not self.partner_id:
             raise ValidationError(_("This task has no customer set."))
+        if not self.signature:
+            raise ValidationError(_("Sign the credit return before creating the credit note."))
         lines = self.line_ids.filtered("product_id")
         if not lines:
             raise ValidationError(_("Add at least one product."))
@@ -68,6 +98,9 @@ class CreditReturnWizard(models.TransientModel):
             "invoice_date": fields.Date.context_today(self),
             "invoice_origin": self.task_id.name,
             "reza_fsm_task_id": self.task_id.id,
+            "signature": self.signature,
+            "signed_by": self.signed_by or self.partner_id.name,
+            "signed_on": self.signed_on or fields.Datetime.now(),
         })
 
         Event = self.env["reza.fsm.credit.return.event"].with_company(self.company_id)
@@ -108,6 +141,7 @@ class CreditReturnWizard(models.TransientModel):
             move_line.write({"reza_fsm_credit_return_event_id": event.id})
 
         move.sudo().action_post()
+        move.sudo()._reza_fsm_attach_signed_credit_note()
 
         return {
             "type": "ir.actions.act_window",

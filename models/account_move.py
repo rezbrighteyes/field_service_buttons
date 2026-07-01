@@ -69,10 +69,7 @@ class AccountMove(models.Model):
 
     def _reza_fsm_is_signable_credit_note(self):
         self.ensure_one()
-        return bool(
-            self.reza_fsm_task_id
-            and self.move_type in ("out_refund", "in_refund")
-        )
+        return self.move_type == "out_refund"
 
     def _reza_fsm_attach_signed_credit_note(self):
         self.ensure_one()
