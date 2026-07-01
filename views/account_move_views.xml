@@ -5,6 +5,15 @@
         <field name="model">account.move</field>
         <field name="inherit_id" ref="account.view_move_form"/>
         <field name="arch" type="xml">
+            <xpath expr="//form/header" position="inside">
+                <widget
+                    name="signature"
+                    string="Sign"
+                    highlight="1"
+                    invisible="is_signed or not reza_fsm_task_id or move_type not in ('out_refund', 'in_refund')"
+                    full_name="partner_id"
+                />
+            </xpath>
             <xpath expr="//field[@name='partner_id']" position="after">
                 <field
                     name="reza_fsm_task_id"
@@ -12,20 +21,24 @@
                     invisible="not reza_fsm_task_id"
                 />
                 <field
-                    name="reza_fsm_customer_signed_by"
-                    readonly="1"
-                    invisible="not reza_fsm_customer_signature"
+                    name="is_signed"
+                    invisible="1"
                 />
                 <field
-                    name="reza_fsm_customer_signed_on"
+                    name="signed_by"
                     readonly="1"
-                    invisible="not reza_fsm_customer_signature"
+                    invisible="not signature"
                 />
                 <field
-                    name="reza_fsm_customer_signature"
+                    name="signed_on"
+                    readonly="1"
+                    invisible="not signature"
+                />
+                <field
+                    name="signature"
                     widget="image"
                     readonly="1"
-                    invisible="not reza_fsm_customer_signature"
+                    invisible="not signature"
                 />
             </xpath>
             <xpath expr="//field[@name='invoice_line_ids']//list//field[@name='quantity']" position="after">

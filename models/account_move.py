@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
+import logging
+
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
+
+_logger = logging.getLogger(__name__)
 
 
 class AccountMove(models.Model):
@@ -19,7 +23,7 @@ class AccountMove(models.Model):
         string="Credit Return Events",
         readonly=True,
     )
-    reza_fsm_customer_signature = fields.Image(
+    signature = fields.Image(
         string="Customer Signature",
         copy=False,
         readonly=True,
@@ -27,21 +31,67 @@ class AccountMove(models.Model):
         max_width=1024,
         max_height=1024,
     )
-    reza_fsm_customer_signed_by = fields.Char(
+    signed_by = fields.Char(
         string="Customer Signed By",
         copy=False,
         readonly=True,
     )
-    reza_fsm_customer_signed_on = fields.Datetime(
+    signed_on = fields.Datetime(
         string="Customer Signed On",
         copy=False,
         readonly=True,
     )
+    is_signed = fields.Boolean(string="Is Signed", compute="_compute_is_signed")
+
+    @api.depends("signature")
+    def _compute_is_signed(self):
+        for move in self:
+            move.is_signed = bool(move.signature)
+
+    def write(self, vals):
+        result = super().write(vals)
+        if vals.get("signature"):
+            for move in self.filtered("_reza_fsm_is_signable_credit_note"):
+                update_vals = {}
+                if not move.signed_by:
+                    update_vals["signed_by"] = move.partner_id.name
+                if not move.signed_on:
+                    update_vals["signed_on"] = fields.Datetime.now()
+                if update_vals:
+                    move.write(update_vals)
+                move._reza_fsm_attach_signed_credit_note()
+        return result
 
     def action_post(self):
         result = super().action_post()
         self._reza_fsm_process_credit_return_events()
         return result
+
+    def _reza_fsm_is_signable_credit_note(self):
+        self.ensure_one()
+        return bool(
+            self.reza_fsm_task_id
+            and self.move_type in ("out_refund", "in_refund")
+        )
+
+    def _reza_fsm_attach_signed_credit_note(self):
+        self.ensure_one()
+        try:
+            report = self.env["ir.actions.report"]._render_qweb_pdf(
+                "account.account_invoices",
+                self.id,
+            )
+        except Exception:
+            _logger.exception("Could not attach signed credit note PDF for %s", self.display_name)
+            self.message_post(body=_("Credit note signed by %s.") % (self.signed_by or self.partner_id.name))
+            return False
+
+        filename = "%s_signed_credit_note" % (self.name or self.display_name)
+        self.message_post(
+            attachments=[("%s.pdf" % filename, report[0])],
+            body=_("Credit note signed by %s.") % (self.signed_by or self.partner_id.name),
+        )
+        return True
 
     def _reza_fsm_process_credit_return_events(self):
         for move in self:
