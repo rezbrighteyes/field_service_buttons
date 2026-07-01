@@ -23,6 +23,7 @@
         'views/credit_return_wizard_views.xml',
         'views/product_catalog_views.xml',
         'views/account_move_views.xml',
+        'views/account_move_report.xml',
         'views/project_task_views.xml',
         'views/assets.xml',
     ],

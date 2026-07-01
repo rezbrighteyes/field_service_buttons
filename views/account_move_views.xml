@@ -11,6 +11,22 @@
                     readonly="1"
                     invisible="not reza_fsm_task_id"
                 />
+                <field
+                    name="reza_fsm_customer_signed_by"
+                    readonly="1"
+                    invisible="not reza_fsm_customer_signature"
+                />
+                <field
+                    name="reza_fsm_customer_signed_on"
+                    readonly="1"
+                    invisible="not reza_fsm_customer_signature"
+                />
+                <field
+                    name="reza_fsm_customer_signature"
+                    widget="image"
+                    readonly="1"
+                    invisible="not reza_fsm_customer_signature"
+                />
             </xpath>
             <xpath expr="//field[@name='invoice_line_ids']//list//field[@name='quantity']" position="after">
                 <field name="reza_fsm_credit_return_outcome" optional="show"/>

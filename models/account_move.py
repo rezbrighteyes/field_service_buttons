@@ -19,6 +19,24 @@ class AccountMove(models.Model):
         string="Credit Return Events",
         readonly=True,
     )
+    reza_fsm_customer_signature = fields.Image(
+        string="Customer Signature",
+        copy=False,
+        readonly=True,
+        attachment=True,
+        max_width=1024,
+        max_height=1024,
+    )
+    reza_fsm_customer_signed_by = fields.Char(
+        string="Customer Signed By",
+        copy=False,
+        readonly=True,
+    )
+    reza_fsm_customer_signed_on = fields.Datetime(
+        string="Customer Signed On",
+        copy=False,
+        readonly=True,
+    )
 
     def action_post(self):
         result = super().action_post()

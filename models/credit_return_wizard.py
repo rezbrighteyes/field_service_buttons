@@ -38,6 +38,13 @@ class CreditReturnWizard(models.TransientModel):
         "wizard_id",
         string="Products",
     )
+    customer_signed_by = fields.Char(string="Customer Signed By")
+    customer_signature = fields.Image(
+        string="Customer Signature",
+        copy=False,
+        max_width=1024,
+        max_height=1024,
+    )
 
     @api.depends("task_id", "company_id")
     def _compute_allowed_return_location_ids(self):
@@ -50,12 +57,20 @@ class CreditReturnWizard(models.TransientModel):
         task_id = self.env.context.get("default_task_id") or self.env.context.get("active_id")
         if task_id and "task_id" in fields_list:
             values["task_id"] = task_id
+        if task_id and "customer_signed_by" in fields_list:
+            task = self.env["project.task"].browse(task_id).exists()
+            if task and task.partner_id:
+                values["customer_signed_by"] = task.partner_id.name
         return values
 
     def action_create_credit_note(self):
         self.ensure_one()
         if not self.partner_id:
             raise ValidationError(_("This task has no customer set."))
+        if not self.customer_signature:
+            raise ValidationError(_("Capture the customer signature before creating the credit note."))
+        if not (self.customer_signed_by or "").strip():
+            raise ValidationError(_("Enter the name of the customer signing the credit note."))
         lines = self.line_ids.filtered("product_id")
         if not lines:
             raise ValidationError(_("Add at least one product."))
@@ -69,6 +84,9 @@ class CreditReturnWizard(models.TransientModel):
             "invoice_date": fields.Date.context_today(self),
             "invoice_origin": self.task_id.name,
             "reza_fsm_task_id": self.task_id.id,
+            "reza_fsm_customer_signature": self.customer_signature,
+            "reza_fsm_customer_signed_by": self.customer_signed_by.strip(),
+            "reza_fsm_customer_signed_on": fields.Datetime.now(),
         })
 
         Event = self.env["reza.fsm.credit.return.event"].with_company(self.company_id)
