@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <function model="project.task" name="_reza_cleanup_fsm_date_search_defaults"/>
+</odoo>

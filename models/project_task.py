@@ -6,6 +6,7 @@ from odoo.exceptions import UserError, ValidationError
 from odoo.osv import expression
 from odoo.tools import html2plaintext
 from odoo.tools import format_date
+from odoo.tools.safe_eval import safe_eval
 from dateutil.relativedelta import relativedelta
 from markupsafe import Markup
 
@@ -24,6 +25,22 @@ STATE_TO_STAGE = {
 }
 
 CLOSED_STATES = {'1_done', '1_canceled'}
+FSM_DATE_SEARCH_DEFAULT_TOKENS = (
+    'today',
+    'future',
+    'date_deadline',
+    'planned_date',
+    'date_begin',
+    'date_end',
+)
+
+
+class _SafeEvalSymbol:
+    def __init__(self, name):
+        self.name = name
+
+    def __repr__(self):
+        return self.name
 
 
 def _fsm_chatter_plaintext(body):
@@ -81,6 +98,53 @@ class ProjectTask(models.Model):
         compute='_compute_fsm_customer_activity_summary',
         compute_sudo=True,
     )
+
+    @api.model
+    def _reza_cleanup_fsm_date_search_defaults(self):
+        actions = self.env['ir.actions.act_window'].sudo().search([
+            ('res_model', '=', 'project.task'),
+        ])
+        eval_context = {
+            'uid': _SafeEvalSymbol('uid'),
+            'active_id': _SafeEvalSymbol('active_id'),
+            'active_ids': _SafeEvalSymbol('active_ids'),
+        }
+        cleaned_count = 0
+        for action in actions:
+            context_text = action.context or '{}'
+            if not any(token in context_text for token in FSM_DATE_SEARCH_DEFAULT_TOKENS):
+                continue
+            try:
+                context = safe_eval(context_text, eval_context)
+            except Exception:
+                _logger.warning(
+                    'FSM_DEFAULT_FILTER_CLEANUP could not parse action context: action_id=%s context=%s',
+                    action.id,
+                    context_text,
+                    exc_info=True,
+                )
+                continue
+            if not isinstance(context, dict):
+                continue
+            date_default_keys = [
+                key
+                for key in context
+                if key.startswith('search_default_')
+                and any(token in key for token in FSM_DATE_SEARCH_DEFAULT_TOKENS)
+            ]
+            if not date_default_keys:
+                continue
+            for key in date_default_keys:
+                context.pop(key, None)
+            action.context = repr(context)
+            cleaned_count += 1
+            _logger.info(
+                'FSM_DEFAULT_FILTER_CLEANUP removed %s from action %s (%s)',
+                ', '.join(date_default_keys),
+                action.id,
+                action.name,
+            )
+        return cleaned_count
 
     def _fsm_has_completed_worksheet(self):
         self.ensure_one()
