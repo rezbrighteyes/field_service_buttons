@@ -8,6 +8,7 @@ from odoo.tools import html2plaintext
 from odoo.tools import format_date
 from odoo.tools.safe_eval import safe_eval
 from dateutil.relativedelta import relativedelta
+from lxml import etree
 from markupsafe import Markup
 
 _logger = logging.getLogger(__name__)
@@ -145,6 +146,57 @@ class ProjectTask(models.Model):
                 action.name,
             )
         return cleaned_count
+
+    @api.model
+    def _reza_add_liaise_worksheet_rep_column(self):
+        worksheet_model = 'x_project_task_worksheet_template_3'
+        if worksheet_model not in self.env.registry.models:
+            _logger.info(
+                'LIAISE_WORKSHEET_REP_COLUMN skipped because %s is not installed',
+                worksheet_model,
+            )
+            return False
+
+        view = self.env.ref(
+            'reza_field_service_buttons.view_liaise_worksheet_report_list',
+            raise_if_not_found=False,
+        )
+        if not view:
+            view = self.env['ir.ui.view'].sudo().search([
+                ('model', '=', worksheet_model),
+                ('type', '=', 'list'),
+                ('name', '=', 'liaise.worksheet.report.list'),
+            ], limit=1)
+        if not view:
+            _logger.info('LIAISE_WORKSHEET_REP_COLUMN skipped because list view was not found')
+            return False
+
+        arch = view.arch_db or ''
+        try:
+            root = etree.fromstring(arch.encode('utf-8'))
+        except Exception:
+            _logger.warning(
+                'LIAISE_WORKSHEET_REP_COLUMN could not parse view %s arch',
+                view.id,
+                exc_info=True,
+            )
+            return False
+
+        if root.xpath(".//field[@name='create_uid']"):
+            return False
+
+        store_nodes = root.xpath(".//field[@name='x_project_task_id']")
+        rep_node = etree.Element('field', name='create_uid', string='Rep')
+        if store_nodes:
+            store_nodes[0].addnext(rep_node)
+        else:
+            root.insert(0, rep_node)
+
+        view.sudo().write({
+            'arch_db': etree.tostring(root, encoding='unicode'),
+        })
+        _logger.info('LIAISE_WORKSHEET_REP_COLUMN added Rep column to view %s', view.id)
+        return True
 
     def _fsm_has_completed_worksheet(self):
         self.ensure_one()

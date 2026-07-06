@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <function model="project.task" name="_reza_add_liaise_worksheet_rep_column"/>
+</odoo>
