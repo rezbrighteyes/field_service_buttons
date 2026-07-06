@@ -23,13 +23,13 @@ class TestProjectTaskStatusGuard(TransactionCase):
             'name': 'FSM Non Manager',
             'login': 'fsm_non_manager_test',
             'email': 'fsm_non_manager_test@example.com',
-            'groups_id': [(6, 0, [project_user_group.id])],
+            'group_ids': [(6, 0, [project_user_group.id])],
         })
         self.controller = self.env['res.users'].create({
             'name': 'FSM Controller',
             'login': 'fsm_controller_reason_test',
             'email': 'fsm_controller_reason_test@example.com',
-            'groups_id': [(6, 0, [self.fsm_controllers_group.id])],
+            'group_ids': [(6, 0, [self.fsm_controllers_group.id])],
         })
 
         self.project = self.Project.create({
@@ -59,7 +59,7 @@ class TestProjectTaskStatusGuard(TransactionCase):
             'name': 'FSM Manager',
             'login': 'fsm_manager_test',
             'email': 'fsm_manager_test@example.com',
-            'groups_id': [(6, 0, [self.manager_group.id])],
+            'group_ids': [(6, 0, [self.manager_group.id])],
         })
         with self.assertRaises(ValidationError):
             self.parent.with_user(manager).write({'state': '1_done'})
@@ -212,7 +212,7 @@ class TestProjectTaskStatusGuard(TransactionCase):
             'name': 'FSM Delete Project Manager',
             'login': 'fsm_delete_project_manager_test',
             'email': 'fsm_delete_project_manager_test@example.com',
-            'groups_id': [(6, 0, [self.manager_group.id])],
+            'group_ids': [(6, 0, [self.manager_group.id])],
         })
         with self.assertRaises(ValidationError):
             self.parent.with_user(manager).unlink()

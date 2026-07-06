@@ -26,13 +26,13 @@ class TestFSMChatterLock(TransactionCase):
             'name': 'FSM Non-Controller',
             'login': 'fsm_non_ctrl_chatter_test',
             'email': 'fsm_non_ctrl_chatter@example.com',
-            'groups_id': [(6, 0, [project_user_group.id])],
+            'group_ids': [(6, 0, [project_user_group.id])],
         })
         self.controller = self.env['res.users'].create({
             'name': 'FSM Controller',
             'login': 'fsm_ctrl_chatter_test',
             'email': 'fsm_ctrl_chatter@example.com',
-            'groups_id': [(6, 0, [fsm_controllers_group.id])],
+            'group_ids': [(6, 0, [fsm_controllers_group.id])],
         })
 
         self.project = self.env['project.project'].create({
