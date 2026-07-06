@@ -149,24 +149,16 @@ class ProjectTask(models.Model):
 
     @api.model
     def _reza_add_liaise_worksheet_rep_column(self):
-        worksheet_model = 'x_project_task_worksheet_template_3'
-        if worksheet_model not in self.env.registry.models:
-            _logger.info(
-                'LIAISE_WORKSHEET_REP_COLUMN skipped because %s is not installed',
-                worksheet_model,
-            )
-            return False
-
         View = self.env['ir.ui.view'].sudo()
         views = View
         view = self.env.ref(
             'reza_field_service_buttons.view_liaise_worksheet_report_list',
             raise_if_not_found=False,
         )
-        if view and view.model == worksheet_model:
+        if view and view.model in self.env.registry.models:
             views |= view.sudo()
         views |= View.search([
-            ('model', '=', worksheet_model),
+            ('model', 'like', 'x_project_task_worksheet_template_%'),
             ('type', 'in', ('list', 'tree')),
         ])
         if not views:
@@ -190,7 +182,15 @@ class ProjectTask(models.Model):
                 continue
 
             store_nodes = root.xpath(".//field[@name='x_project_task_id']")
-            if not store_nodes:
+            has_liaise_fields = any(root.xpath(".//field[@name='%s']" % field_name) for field_name in (
+                'x_thongs',
+                'x_sunnies',
+                'x_hats',
+                'x_tech',
+                'x_outdoor',
+                'x_order_placed',
+            ))
+            if not store_nodes or not has_liaise_fields:
                 continue
 
             rep_node = etree.Element('field', name='create_uid', string='Rep')
