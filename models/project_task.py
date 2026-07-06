@@ -157,46 +157,50 @@ class ProjectTask(models.Model):
             )
             return False
 
+        View = self.env['ir.ui.view'].sudo()
+        views = View
         view = self.env.ref(
             'reza_field_service_buttons.view_liaise_worksheet_report_list',
             raise_if_not_found=False,
         )
-        if not view:
-            view = self.env['ir.ui.view'].sudo().search([
-                ('model', '=', worksheet_model),
-                ('type', '=', 'list'),
-                ('name', '=', 'liaise.worksheet.report.list'),
-            ], limit=1)
-        if not view:
+        if view and view.model == worksheet_model:
+            views |= view.sudo()
+        views |= View.search([
+            ('model', '=', worksheet_model),
+            ('type', 'in', ('list', 'tree')),
+        ])
+        if not views:
             _logger.info('LIAISE_WORKSHEET_REP_COLUMN skipped because list view was not found')
             return False
 
-        arch = view.arch_db or ''
-        try:
-            root = etree.fromstring(arch.encode('utf-8'))
-        except Exception:
-            _logger.warning(
-                'LIAISE_WORKSHEET_REP_COLUMN could not parse view %s arch',
-                view.id,
-                exc_info=True,
-            )
-            return False
+        patched_count = 0
+        for view in views:
+            arch = view.arch_db or ''
+            try:
+                root = etree.fromstring(arch.encode('utf-8'))
+            except Exception:
+                _logger.warning(
+                    'LIAISE_WORKSHEET_REP_COLUMN could not parse view %s arch',
+                    view.id,
+                    exc_info=True,
+                )
+                continue
 
-        if root.xpath(".//field[@name='create_uid']"):
-            return False
+            if root.xpath(".//field[@name='create_uid']"):
+                continue
 
-        store_nodes = root.xpath(".//field[@name='x_project_task_id']")
-        rep_node = etree.Element('field', name='create_uid', string='Rep')
-        if store_nodes:
+            store_nodes = root.xpath(".//field[@name='x_project_task_id']")
+            if not store_nodes:
+                continue
+
+            rep_node = etree.Element('field', name='create_uid', string='Rep')
             store_nodes[0].addnext(rep_node)
-        else:
-            root.insert(0, rep_node)
-
-        view.sudo().write({
-            'arch_db': etree.tostring(root, encoding='unicode'),
-        })
-        _logger.info('LIAISE_WORKSHEET_REP_COLUMN added Rep column to view %s', view.id)
-        return True
+            view.write({
+                'arch_db': etree.tostring(root, encoding='unicode'),
+            })
+            patched_count += 1
+            _logger.info('LIAISE_WORKSHEET_REP_COLUMN added Rep column to view %s', view.id)
+        return patched_count
 
     def _fsm_has_completed_worksheet(self):
         self.ensure_one()
