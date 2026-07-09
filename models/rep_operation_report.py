@@ -216,7 +216,7 @@ class FsmRepOperationReport(models.Model):
                         LIMIT 1
                     ) parent_user ON TRUE
                     WHERE
-                        (task.is_fsm IS TRUE OR project.is_fsm IS TRUE)
+                        project.is_fsm IS TRUE
                         AND task.active IS TRUE
                 ),
                 enriched AS (

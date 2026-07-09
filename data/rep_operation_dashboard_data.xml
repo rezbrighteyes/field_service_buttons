@@ -1,0 +1,281 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="dashboard_group_reza_fsm_rep_operations" model="spreadsheet.dashboard.group">
+        <field name="name">Field Service</field>
+        <field name="sequence">40</field>
+    </record>
+
+    <record id="dashboard_reza_fsm_rep_operations" model="spreadsheet.dashboard">
+        <field name="name">Rep Operations</field>
+        <field name="dashboard_group_id" ref="dashboard_group_reza_fsm_rep_operations"/>
+        <field name="sequence">10</field>
+        <field name="is_published">True</field>
+        <field name="group_ids" eval="[(4, ref('reza_field_service_buttons.group_fsm_controllers'))]"/>
+        <field name="main_data_model_ids" eval="[(4, ref('model_reza_fsm_rep_operation_report'))]"/>
+        <field name="spreadsheet_data"><![CDATA[
+{
+  "version": "18.5.10",
+  "sheets": [
+    {
+      "id": "rep-operations-dashboard",
+      "name": "Dashboard",
+      "colNumber": 8,
+      "rowNumber": 48,
+      "rows": {
+        "0": { "size": 34 },
+        "2": { "size": 28 },
+        "14": { "size": 28 },
+        "28": { "size": 28 }
+      },
+      "cols": {
+        "0": { "size": 210 },
+        "1": { "size": 120 },
+        "2": { "size": 120 },
+        "3": { "size": 80 },
+        "4": { "size": 210 },
+        "5": { "size": 120 },
+        "6": { "size": 120 },
+        "7": { "size": 80 }
+      },
+      "merges": ["A1:H1", "A3:D3", "E3:H3", "A15:D15", "E15:H15", "A29:H29"],
+      "cells": {
+        "A1": "Rep Operations Control Center",
+        "A3": "Exceptions by rep",
+        "E3": "Run status",
+        "A15": "Worksheet compliance",
+        "E15": "Credit / return activity",
+        "A29": "Attention list",
+        "A30": "=PIVOT(1, 10, FALSE, FALSE)",
+        "E30": "=PIVOT(2, 10, FALSE, FALSE)"
+      },
+      "styles": {
+        "A1": 1,
+        "A3:H3": 2,
+        "A15:H15": 2,
+        "A29:H29": 2,
+        "A30:H48": 3
+      },
+      "formats": {},
+      "borders": {},
+      "conditionalFormats": [],
+      "dataValidationRules": [],
+      "figures": [
+        {
+          "id": "chart-exceptions-by-rep",
+          "width": 500,
+          "height": 250,
+          "tag": "chart",
+          "data": {
+            "title": { "text": "Exceptions by rep", "bold": true },
+            "background": "#FFFFFF",
+            "legendPosition": "top",
+            "metaData": {
+              "groupBy": ["rep_id"],
+              "measure": "task_count",
+              "order": null,
+              "resModel": "reza.fsm.rep.operation.report",
+              "mode": "bar"
+            },
+            "searchParams": {
+              "comparison": null,
+              "context": { "group_by": [] },
+              "domain": [["task_level", "=", "visit"], ["exception_type", "!=", "ok"]],
+              "groupBy": ["rep_id"],
+              "orderBy": []
+            },
+            "type": "odoo_bar",
+            "actionXmlId": "reza_field_service_buttons.action_reza_fsm_rep_operation_report",
+            "dataSets": [{}],
+            "verticalAxisPosition": "left",
+            "stacked": false,
+            "chartId": "chart-exceptions-by-rep"
+          },
+          "offset": { "x": 0, "y": 14 },
+          "col": 0,
+          "row": 3
+        },
+        {
+          "id": "chart-status-by-rep",
+          "width": 500,
+          "height": 250,
+          "tag": "chart",
+          "data": {
+            "title": { "text": "Visits by status", "bold": true },
+            "background": "#FFFFFF",
+            "legendPosition": "top",
+            "metaData": {
+              "groupBy": ["status_bucket"],
+              "measure": "task_count",
+              "order": null,
+              "resModel": "reza.fsm.rep.operation.report",
+              "mode": "bar"
+            },
+            "searchParams": {
+              "comparison": null,
+              "context": { "group_by": [] },
+              "domain": [["task_level", "=", "visit"]],
+              "groupBy": ["status_bucket"],
+              "orderBy": []
+            },
+            "type": "odoo_bar",
+            "actionXmlId": "reza_field_service_buttons.action_reza_fsm_rep_operation_report",
+            "dataSets": [{}],
+            "verticalAxisPosition": "left",
+            "stacked": false,
+            "chartId": "chart-status-by-rep"
+          },
+          "offset": { "x": 0, "y": 14 },
+          "col": 4,
+          "row": 3
+        },
+        {
+          "id": "chart-worksheet-compliance",
+          "width": 500,
+          "height": 250,
+          "tag": "chart",
+          "data": {
+            "title": { "text": "Worksheet compliance", "bold": true },
+            "background": "#FFFFFF",
+            "legendPosition": "top",
+            "metaData": {
+              "groupBy": ["worksheet_status"],
+              "measure": "task_count",
+              "order": null,
+              "resModel": "reza.fsm.rep.operation.report",
+              "mode": "bar"
+            },
+            "searchParams": {
+              "comparison": null,
+              "context": { "group_by": [] },
+              "domain": [["task_level", "=", "visit"]],
+              "groupBy": ["worksheet_status"],
+              "orderBy": []
+            },
+            "type": "odoo_bar",
+            "actionXmlId": "reza_field_service_buttons.action_reza_fsm_rep_operation_report",
+            "dataSets": [{}],
+            "verticalAxisPosition": "left",
+            "stacked": false,
+            "chartId": "chart-worksheet-compliance"
+          },
+          "offset": { "x": 0, "y": 14 },
+          "col": 0,
+          "row": 15
+        },
+        {
+          "id": "chart-credit-return-by-rep",
+          "width": 500,
+          "height": 250,
+          "tag": "chart",
+          "data": {
+            "title": { "text": "Credit / return value by rep", "bold": true },
+            "background": "#FFFFFF",
+            "legendPosition": "top",
+            "metaData": {
+              "groupBy": ["rep_id"],
+              "measure": "credit_return_value",
+              "order": null,
+              "resModel": "reza.fsm.rep.operation.report",
+              "mode": "bar"
+            },
+            "searchParams": {
+              "comparison": null,
+              "context": { "group_by": [] },
+              "domain": [["task_level", "=", "visit"], ["has_credit_return", "=", true]],
+              "groupBy": ["rep_id"],
+              "orderBy": []
+            },
+            "type": "odoo_bar",
+            "actionXmlId": "reza_field_service_buttons.action_reza_fsm_rep_operation_report",
+            "dataSets": [{}],
+            "verticalAxisPosition": "left",
+            "stacked": false,
+            "chartId": "chart-credit-return-by-rep"
+          },
+          "offset": { "x": 0, "y": 14 },
+          "col": 4,
+          "row": 15
+        }
+      ],
+      "tables": [],
+      "areGridLinesVisible": true,
+      "isVisible": true,
+      "headerGroups": { "ROW": [], "COL": [] },
+      "comments": {}
+    }
+  ],
+  "styles": {
+    "1": { "textColor": "#2F4F4F", "bold": true, "fontSize": 22 },
+    "2": { "textColor": "#2F4F4F", "bold": true, "fontSize": 14, "fillColor": "#F3F6F6" },
+    "3": { "textColor": "#434343", "fontSize": 11 }
+  },
+  "formats": {},
+  "borders": {},
+  "revisionId": "START_REVISION",
+  "uniqueFigureIds": true,
+  "settings": {
+    "locale": {
+      "name": "English (US)",
+      "code": "en_US",
+      "thousandsSeparator": ",",
+      "decimalSeparator": ".",
+      "dateFormat": "mm/dd/yyyy",
+      "timeFormat": "hh:mm:ss",
+      "formulaArgSeparator": ",",
+      "weekStart": 7
+    }
+  },
+  "pivots": {
+    "1": {
+      "type": "ODOO",
+      "context": { "group_by": [] },
+      "domain": [["task_level", "=", "visit"], ["exception_type", "!=", "ok"]],
+      "id": "1",
+      "measures": [
+        { "id": "task_count", "fieldName": "task_count", "userDefinedName": "Visits" },
+        { "id": "overdue_count", "fieldName": "overdue_count", "userDefinedName": "Overdue" },
+        { "id": "missing_worksheet_count", "fieldName": "missing_worksheet_count", "userDefinedName": "Missing Worksheet" }
+      ],
+      "model": "reza.fsm.rep.operation.report",
+      "name": "Exception list",
+      "sortedColumn": { "measure": "task_count", "order": "desc", "domain": [] },
+      "formulaId": "1",
+      "columns": [{ "fieldName": "exception_type" }],
+      "rows": [{ "fieldName": "rep_id" }],
+      "fieldMatching": {}
+    },
+    "2": {
+      "type": "ODOO",
+      "context": { "group_by": [] },
+      "domain": [["task_level", "=", "visit"]],
+      "id": "2",
+      "measures": [
+        { "id": "done_count", "fieldName": "done_count", "userDefinedName": "Done" },
+        { "id": "open_count", "fieldName": "open_count", "userDefinedName": "Open" },
+        { "id": "cancelled_count", "fieldName": "cancelled_count", "userDefinedName": "Cancelled" },
+        { "id": "credit_return_value", "fieldName": "credit_return_value", "userDefinedName": "Credit / Return Value" }
+      ],
+      "model": "reza.fsm.rep.operation.report",
+      "name": "Rep performance",
+      "sortedColumn": { "measure": "done_count", "order": "desc", "domain": [] },
+      "formulaId": "2",
+      "columns": [],
+      "rows": [{ "fieldName": "rep_id" }],
+      "fieldMatching": {}
+    }
+  },
+  "pivotNextId": 3,
+  "lists": {},
+  "listNextId": 1,
+  "globalFilters": [],
+  "customTableStyles": {},
+  "chartOdooMenusReferences": {
+    "chart-exceptions-by-rep": "industry_fsm.fsm_menu_reporting",
+    "chart-status-by-rep": "industry_fsm.fsm_menu_reporting",
+    "chart-worksheet-compliance": "industry_fsm.fsm_menu_reporting",
+    "chart-credit-return-by-rep": "industry_fsm.fsm_menu_reporting"
+  }
+}
+        ]]></field>
+    </record>
+</odoo>
