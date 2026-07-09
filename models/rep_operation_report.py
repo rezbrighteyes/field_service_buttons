@@ -18,6 +18,7 @@ class FsmRepOperationReport(models.Model):
         readonly=True,
     )
     rep_id = fields.Many2one("res.users", string="Rep", readonly=True)
+    rep_name = fields.Char(string="Rep / Assignment", readonly=True)
     partner_id = fields.Many2one("res.partner", string="Customer / Store", readonly=True)
     company_id = fields.Many2one("res.company", string="Company", readonly=True)
     currency_id = fields.Many2one("res.currency", string="Currency", readonly=True)
@@ -171,6 +172,7 @@ class FsmRepOperationReport(models.Model):
                         COALESCE(task.parent_id, task.id) AS run_task_id,
                         CASE WHEN task.parent_id IS NULL THEN 'run' ELSE 'visit' END AS task_level,
                         COALESCE(task_user.user_id, parent_user.user_id) AS rep_id,
+                        COALESCE(rep_partner.name, 'Unassigned') AS rep_name,
                         COALESCE(task.partner_id, parent.partner_id) AS partner_id,
                         COALESCE(task.company_id, project.company_id) AS company_id,
                         company.currency_id,
@@ -215,6 +217,8 @@ class FsmRepOperationReport(models.Model):
                         ORDER BY rel.{user_col}
                         LIMIT 1
                     ) parent_user ON TRUE
+                    LEFT JOIN res_users rep_user ON rep_user.id = COALESCE(task_user.user_id, parent_user.user_id)
+                    LEFT JOIN res_partner rep_partner ON rep_partner.id = rep_user.partner_id
                     WHERE
                         project.is_fsm IS TRUE
                         AND task.active IS TRUE
@@ -280,6 +284,7 @@ class FsmRepOperationReport(models.Model):
                     exceptioned.run_task_id,
                     exceptioned.task_level,
                     exceptioned.rep_id,
+                    exceptioned.rep_name,
                     exceptioned.partner_id,
                     exceptioned.company_id,
                     exceptioned.currency_id,

@@ -15,6 +15,7 @@
             >
                 <field name="exception_type"/>
                 <field name="rep_id"/>
+                <field name="rep_name" optional="hide"/>
                 <field name="run_task_id"/>
                 <field name="task_id"/>
                 <field name="task_level"/>
