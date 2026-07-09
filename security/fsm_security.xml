@@ -16,6 +16,17 @@
         ]"/>
     </record>
 
+    <record id="rule_liaise_field_rep_customer_contacts" model="ir.rule">
+        <field name="name">Contacts: Liaise Field Rep Customer Access</field>
+        <field name="model_id" ref="base.model_res_partner"/>
+        <field name="groups" eval="[(4, ref('reza_field_service_buttons.group_liaise_field_rep'))]"/>
+        <field name="domain_force">['|', '|', ('customer_rank', '&gt;', 0), ('parent_id.customer_rank', '&gt;', 0), ('id', '=', user.partner_id.id)]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+
     <!-- Internal users who are NOT in FSM Controllers can only access non-FSM tasks -->
     <record id="rule_project_task_internal_non_fsm_only" model="ir.rule">
         <field name="name">Project Task: Internal Non-FSM Only</field>
