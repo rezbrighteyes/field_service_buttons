@@ -20,7 +20,7 @@
         <field name="name">Contacts: Liaise Field Rep Customer Access</field>
         <field name="model_id" ref="base.model_res_partner"/>
         <field name="groups" eval="[(4, ref('reza_field_service_buttons.group_liaise_field_rep'))]"/>
-        <field name="domain_force">['|', '|', ('customer_rank', '&gt;', 0), ('parent_id.customer_rank', '&gt;', 0), ('id', '=', user.partner_id.id)]</field>
+        <field name="domain_force">['|', '|', '|', ('customer_rank', '&gt;', 0), ('parent_id.customer_rank', '&gt;', 0), ('id', '=', user.partner_id.id), ('user_ids', '!=', False)]</field>
         <field name="perm_read" eval="True"/>
         <field name="perm_write" eval="True"/>
         <field name="perm_create" eval="False"/>
