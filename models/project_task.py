@@ -689,7 +689,7 @@ class ProjectTask(models.Model):
                     continue
                 if not task.partner_id:
                     continue
-                _m = task.partner_id.message_post(
+                _m = task.partner_id.with_user(SUPERUSER_ID).sudo().message_post(
                     body=Markup(
                         _('Worksheet completed for Field Service task <b>{task}</b>.')
                     ).format(task=task.display_name),
@@ -724,7 +724,7 @@ class ProjectTask(models.Model):
                         'Sub-task "%s" was marked Cancelled by %s. Reason: %s'
                     ) % (task.display_name, rep_name, reason)
                     customer_body = parent_body
-                task.parent_id.message_post(
+                task.parent_id.with_user(SUPERUSER_ID).sudo().message_post(
                     body=parent_body,
                     message_type='comment',
                     subtype_xmlid='mail.mt_note',
