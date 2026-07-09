@@ -152,7 +152,12 @@
             "dataSets": [{}],
             "verticalAxisPosition": "left",
             "stacked": false,
-            "chartId": "chart-exceptions-by-rep"
+            "chartId": "chart-exceptions-by-rep",
+            "fieldMatching": {
+              "filter-planned-date": { "chain": "planned_date", "type": "date", "offset": 0 },
+              "filter-rep": { "chain": "rep_id", "type": "many2one" },
+              "filter-customer": { "chain": "partner_id", "type": "many2one" }
+            }
           },
           "offset": { "x": 0, "y": 14 },
           "col": 0,
@@ -186,7 +191,12 @@
             "dataSets": [{}],
             "verticalAxisPosition": "left",
             "stacked": false,
-            "chartId": "chart-status-by-rep"
+            "chartId": "chart-status-by-rep",
+            "fieldMatching": {
+              "filter-planned-date": { "chain": "planned_date", "type": "date", "offset": 0 },
+              "filter-rep": { "chain": "rep_id", "type": "many2one" },
+              "filter-customer": { "chain": "partner_id", "type": "many2one" }
+            }
           },
           "offset": { "x": 0, "y": 14 },
           "col": 4,
@@ -220,7 +230,12 @@
             "dataSets": [{}],
             "verticalAxisPosition": "left",
             "stacked": false,
-            "chartId": "chart-worksheet-compliance"
+            "chartId": "chart-worksheet-compliance",
+            "fieldMatching": {
+              "filter-planned-date": { "chain": "planned_date", "type": "date", "offset": 0 },
+              "filter-rep": { "chain": "rep_id", "type": "many2one" },
+              "filter-customer": { "chain": "partner_id", "type": "many2one" }
+            }
           },
           "offset": { "x": 0, "y": 14 },
           "col": 0,
@@ -246,7 +261,7 @@
               "comparison": null,
               "context": { "group_by": [] },
               "domain": [["task_level", "=", "visit"], ["has_credit_return", "=", true]],
-              "groupBy": ["rep_id"],
+              "groupBy": ["rep_name"],
               "orderBy": []
             },
             "type": "odoo_bar",
@@ -254,7 +269,12 @@
             "dataSets": [{}],
             "verticalAxisPosition": "left",
             "stacked": false,
-            "chartId": "chart-credit-return-by-rep"
+            "chartId": "chart-credit-return-by-rep",
+            "fieldMatching": {
+              "filter-planned-date": { "chain": "planned_date", "type": "date", "offset": 0 },
+              "filter-rep": { "chain": "rep_id", "type": "many2one" },
+              "filter-customer": { "chain": "partner_id", "type": "many2one" }
+            }
           },
           "offset": { "x": 0, "y": 14 },
           "col": 4,
@@ -306,7 +326,11 @@
       "formulaId": "1",
       "columns": [{ "fieldName": "exception_type" }],
       "rows": [{ "fieldName": "rep_id" }],
-      "fieldMatching": {}
+      "fieldMatching": {
+        "filter-planned-date": { "chain": "planned_date", "type": "date", "offset": 0 },
+        "filter-rep": { "chain": "rep_id", "type": "many2one" },
+        "filter-customer": { "chain": "partner_id", "type": "many2one" }
+      }
     },
     "2": {
       "type": "ODOO",
@@ -325,7 +349,11 @@
       "formulaId": "2",
       "columns": [],
       "rows": [{ "fieldName": "rep_id" }],
-      "fieldMatching": {}
+      "fieldMatching": {
+        "filter-planned-date": { "chain": "planned_date", "type": "date", "offset": 0 },
+        "filter-rep": { "chain": "rep_id", "type": "many2one" },
+        "filter-customer": { "chain": "partner_id", "type": "many2one" }
+      }
     }
   },
   "pivotNextId": 3,
@@ -342,11 +370,35 @@
       ],
       "id": "1",
       "name": "Attention list",
-      "fieldMatching": {}
+      "fieldMatching": {
+        "filter-planned-date": { "chain": "planned_date", "type": "date", "offset": 0 },
+        "filter-rep": { "chain": "rep_id", "type": "many2one" },
+        "filter-customer": { "chain": "partner_id", "type": "many2one" }
+      }
     }
   },
   "listNextId": 2,
-  "globalFilters": [],
+  "globalFilters": [
+    {
+      "id": "filter-planned-date",
+      "type": "date",
+      "label": "Planned Date"
+    },
+    {
+      "id": "filter-rep",
+      "type": "relation",
+      "label": "Rep",
+      "modelName": "res.users",
+      "defaultValueDisplayNames": []
+    },
+    {
+      "id": "filter-customer",
+      "type": "relation",
+      "label": "Customer / Store",
+      "modelName": "res.partner",
+      "defaultValueDisplayNames": []
+    }
+  ],
   "customTableStyles": {},
   "chartOdooMenusReferences": {
     "chart-exceptions-by-rep": "industry_fsm.fsm_menu_reporting",
