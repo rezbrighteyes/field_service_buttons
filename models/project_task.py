@@ -206,7 +206,10 @@ class ProjectTask(models.Model):
         self.ensure_one()
         if self.fsm_done:
             return True
+        return self._fsm_has_worksheet_record()
 
+    def _fsm_has_worksheet_record(self):
+        self.ensure_one()
         worksheet_model_names = [
             model_name
             for model_name in self.env.registry.models
@@ -222,7 +225,7 @@ class ProjectTask(models.Model):
 
     def _fsm_will_have_completed_worksheet(self, vals):
         self.ensure_one()
-        return bool(vals.get('fsm_done') or self._fsm_has_completed_worksheet())
+        return self._fsm_has_worksheet_record()
 
     def _fsm_format_activity_summary(self, activity, label):
         self.ensure_one()
@@ -571,6 +574,7 @@ class ProjectTask(models.Model):
         marking_done = (
             vals.get('state') == '1_done'
             or vals.get('stage_id') == FSM_STAGE_DONE
+            or vals.get('fsm_done') is True
         )
         if marking_done:
             for task in self:

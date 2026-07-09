@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from datetime import date
+from unittest.mock import patch
 
 from odoo.exceptions import ValidationError
 from odoo.tests.common import TransactionCase, tagged
@@ -65,16 +66,24 @@ class TestProjectTaskStatusGuard(TransactionCase):
             self.parent.with_user(manager).write({'state': '1_done'})
 
     def test_auto_update_flow_allowed_for_parent(self):
-        self.child.with_user(self.non_manager).write({
-            'fsm_done': True,
-            'state': '1_done',
-        })
+        with patch.object(type(self.child), '_fsm_has_worksheet_record', return_value=True):
+            self.child.with_user(self.non_manager).write({
+                'fsm_done': True,
+                'state': '1_done',
+            })
         self.parent.invalidate_recordset(['state'])
         self.assertEqual(self.parent.state, '1_done')
 
     def test_subtask_done_requires_completed_worksheet(self):
         with self.assertRaises(ValidationError):
             self.child.with_user(self.non_manager).write({'state': '1_done'})
+
+    def test_subtask_done_with_fsm_done_requires_completed_worksheet(self):
+        with self.assertRaises(ValidationError):
+            self.child.with_user(self.non_manager).write({
+                'fsm_done': True,
+                'state': '1_done',
+            })
 
     def test_leaf_task_unchanged_for_non_manager(self):
         leaf = self.Task.create({
@@ -145,7 +154,8 @@ class TestProjectTaskStatusGuard(TransactionCase):
             'user_id': self.env.user.id,
         })
 
-        self.child.write({'fsm_done': True, 'state': '1_done'})
+        with patch.object(type(self.child), '_fsm_has_worksheet_record', return_value=True):
+            self.child.write({'fsm_done': True, 'state': '1_done'})
         self.child.invalidate_recordset(['fsm_customer_activity_summary'])
         self.assertIn('Check fishing display', self.child.fsm_customer_activity_summary)
         self.assertIn('Customer reminder', self.child.fsm_customer_activity_summary)
@@ -155,7 +165,8 @@ class TestProjectTaskStatusGuard(TransactionCase):
         self.assertIn('complete the worksheet', self.child.fsm_customer_activity_summary)
 
     def test_subtask_reminds_to_mark_done_after_worksheet(self):
-        self.child.write({'fsm_done': True})
+        with patch.object(type(self.child), '_fsm_has_worksheet_record', return_value=True):
+            self.child.write({'fsm_done': True})
         self.child.invalidate_recordset(['fsm_customer_activity_summary'])
         self.assertIn('Mark this sub-task Done', self.child.fsm_customer_activity_summary)
 
@@ -169,7 +180,8 @@ class TestProjectTaskStatusGuard(TransactionCase):
             'user_id': self.env.user.id,
         })
 
-        self.child.write({'fsm_done': True})
+        with patch.object(type(self.child), '_fsm_has_worksheet_record', return_value=True):
+            self.child.write({'fsm_done': True})
         self.child.invalidate_recordset(['fsm_customer_activity_summary'])
         self.assertIn('Task reminder', self.child.fsm_customer_activity_summary)
         self.assertIn('test', self.child.fsm_customer_activity_summary)
