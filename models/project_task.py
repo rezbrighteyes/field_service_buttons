@@ -220,6 +220,10 @@ class ProjectTask(models.Model):
                 return True
         return False
 
+    def _fsm_will_have_completed_worksheet(self, vals):
+        self.ensure_one()
+        return bool(vals.get('fsm_done') or self._fsm_has_completed_worksheet())
+
     def _fsm_format_activity_summary(self, activity, label):
         self.ensure_one()
         today = fields.Date.context_today(self)
@@ -563,6 +567,22 @@ class ProjectTask(models.Model):
     def write(self, vals):
         if 'fsm_next_visit_date' in vals and not self.env.context.get('fsm_sync_next_visit_date'):
             vals = dict(vals, fsm_next_visit_date_manual=True)
+
+        marking_done = (
+            vals.get('state') == '1_done'
+            or vals.get('stage_id') == FSM_STAGE_DONE
+        )
+        if marking_done:
+            for task in self:
+                if (
+                    task.parent_id
+                    and task.state != '1_done'
+                    and (task.is_fsm or (task.project_id and task.project_id.is_fsm))
+                    and not task._fsm_will_have_completed_worksheet(vals)
+                ):
+                    raise ValidationError(_(
+                        'Complete the worksheet before marking this visit Done.'
+                    ))
 
         if vals.get('state') == '1_canceled':
             for task in self:

@@ -65,9 +65,16 @@ class TestProjectTaskStatusGuard(TransactionCase):
             self.parent.with_user(manager).write({'state': '1_done'})
 
     def test_auto_update_flow_allowed_for_parent(self):
-        self.child.with_user(self.non_manager).write({'state': '1_done'})
+        self.child.with_user(self.non_manager).write({
+            'fsm_done': True,
+            'state': '1_done',
+        })
         self.parent.invalidate_recordset(['state'])
         self.assertEqual(self.parent.state, '1_done')
+
+    def test_subtask_done_requires_completed_worksheet(self):
+        with self.assertRaises(ValidationError):
+            self.child.with_user(self.non_manager).write({'state': '1_done'})
 
     def test_leaf_task_unchanged_for_non_manager(self):
         leaf = self.Task.create({
