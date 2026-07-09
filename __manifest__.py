@@ -21,6 +21,7 @@
         'data/credit_return_reason_data.xml',
         'data/fsm_action_defaults_data.xml',
         'data/liaise_worksheet_report_data.xml',
+        'views/rep_operation_report_views.xml',
         'views/credit_return_event_views.xml',
         'views/credit_return_wizard_views.xml',
         'views/product_catalog_views.xml',

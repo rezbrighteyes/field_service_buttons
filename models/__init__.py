@@ -6,3 +6,4 @@ from . import sale_order
 from . import credit_return
 from . import credit_return_wizard
 from . import account_move
+from . import rep_operation_report

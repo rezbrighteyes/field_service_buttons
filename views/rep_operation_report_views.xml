@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_reza_fsm_rep_operation_report_list" model="ir.ui.view">
+        <field name="name">reza.fsm.rep.operation.report.list</field>
+        <field name="model">reza.fsm.rep.operation.report</field>
+        <field name="arch" type="xml">
+            <list
+                string="Rep Operations"
+                create="0"
+                edit="0"
+                delete="0"
+                decoration-danger="exception_type in ('done_without_worksheet', 'missing_worksheet', 'missing_cancel_reason')"
+                decoration-warning="exception_type in ('worksheet_done_task_open', 'overdue', 'stuck_in_progress', 'missing_next_visit')"
+                decoration-muted="exception_type == 'ok'"
+            >
+                <field name="exception_type"/>
+                <field name="rep_id"/>
+                <field name="run_task_id"/>
+                <field name="task_id"/>
+                <field name="task_level"/>
+                <field name="partner_id"/>
+                <field name="status_bucket"/>
+                <field name="planned_date"/>
+                <field name="days_overdue"/>
+                <field name="worksheet_status"/>
+                <field name="credit_note_count"/>
+                <field name="credit_return_value" sum="Credit / Return Value"/>
+                <field name="fsm_next_visit_date"/>
+                <field name="write_date"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_reza_fsm_rep_operation_report_search" model="ir.ui.view">
+        <field name="name">reza.fsm.rep.operation.report.search</field>
+        <field name="model">reza.fsm.rep.operation.report</field>
+        <field name="arch" type="xml">
+            <search string="Rep Operations">
+                <field name="rep_id"/>
+                <field name="partner_id"/>
+                <field name="run_task_id"/>
+                <field name="task_id"/>
+                <filter name="needs_attention" string="Needs Attention" domain="[('exception_type', '!=', 'ok')]"/>
+                <filter name="missing_worksheet" string="Missing Worksheet" domain="[('exception_type', 'in', ('missing_worksheet', 'done_without_worksheet'))]"/>
+                <filter name="worksheet_done_task_open" string="Worksheet Done, Task Not Done" domain="[('exception_type', '=', 'worksheet_done_task_open')]"/>
+                <filter name="missing_cancel_reason" string="Missing Cancel Reason" domain="[('exception_type', '=', 'missing_cancel_reason')]"/>
+                <filter name="overdue" string="Overdue" domain="[('days_overdue', '&gt;', 0)]"/>
+                <filter name="credit_returns" string="Credit / Return Activity" domain="[('has_credit_return', '=', True)]"/>
+                <filter name="visits" string="Visits Only" domain="[('task_level', '=', 'visit')]"/>
+                <filter name="runs" string="Runs Only" domain="[('task_level', '=', 'run')]"/>
+                <separator/>
+                <filter name="open_tasks" string="Open" domain="[('status_bucket', 'not in', ('done', 'cancelled'))]"/>
+                <filter name="done_tasks" string="Done" domain="[('status_bucket', '=', 'done')]"/>
+                <filter name="cancelled_tasks" string="Cancelled" domain="[('status_bucket', '=', 'cancelled')]"/>
+                <separator/>
+                <group>
+                    <filter name="group_rep" string="Rep" domain="[]" context="{'group_by': 'rep_id'}"/>
+                    <filter name="group_exception" string="Exception" domain="[]" context="{'group_by': 'exception_type'}"/>
+                    <filter name="group_status" string="Status" domain="[]" context="{'group_by': 'status_bucket'}"/>
+                    <filter name="group_worksheet" string="Worksheet" domain="[]" context="{'group_by': 'worksheet_status'}"/>
+                    <filter name="group_customer" string="Customer / Store" domain="[]" context="{'group_by': 'partner_id'}"/>
+                    <filter name="group_run" string="Run" domain="[]" context="{'group_by': 'run_task_id'}"/>
+                    <filter name="group_planned_month" string="Planned Month" domain="[]" context="{'group_by': 'planned_date:month'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_reza_fsm_rep_operation_report_pivot" model="ir.ui.view">
+        <field name="name">reza.fsm.rep.operation.report.pivot</field>
+        <field name="model">reza.fsm.rep.operation.report</field>
+        <field name="arch" type="xml">
+            <pivot string="Rep Operations">
+                <field name="rep_id" type="row"/>
+                <field name="exception_type" type="col"/>
+                <field name="task_count" type="measure"/>
+                <field name="open_count" type="measure"/>
+                <field name="done_count" type="measure"/>
+                <field name="cancelled_count" type="measure"/>
+                <field name="overdue_count" type="measure"/>
+                <field name="missing_worksheet_count" type="measure"/>
+                <field name="worksheet_done_task_open_count" type="measure"/>
+                <field name="credit_return_task_count" type="measure"/>
+                <field name="credit_return_value" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="view_reza_fsm_rep_operation_report_graph" model="ir.ui.view">
+        <field name="name">reza.fsm.rep.operation.report.graph</field>
+        <field name="model">reza.fsm.rep.operation.report</field>
+        <field name="arch" type="xml">
+            <graph string="Rep Operations" type="bar">
+                <field name="rep_id"/>
+                <field name="task_count" type="measure"/>
+                <field name="missing_worksheet_count" type="measure"/>
+                <field name="overdue_count" type="measure"/>
+                <field name="credit_return_task_count" type="measure"/>
+            </graph>
+        </field>
+    </record>
+
+    <record id="action_reza_fsm_rep_operation_report" model="ir.actions.act_window">
+        <field name="name">Rep Operations Control Center</field>
+        <field name="res_model">reza.fsm.rep.operation.report</field>
+        <field name="view_mode">list,pivot,graph</field>
+        <field name="search_view_id" ref="view_reza_fsm_rep_operation_report_search"/>
+        <field name="context">{'search_default_needs_attention': 1, 'search_default_visits': 1}</field>
+    </record>
+
+    <menuitem
+        id="menu_reza_fsm_rep_operation_report"
+        name="Rep Operations"
+        parent="industry_fsm.fsm_menu_reporting"
+        action="action_reza_fsm_rep_operation_report"
+        groups="reza_field_service_buttons.group_fsm_controllers"
+        sequence="5"/>
+</odoo>
