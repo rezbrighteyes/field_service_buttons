@@ -59,7 +59,8 @@ class AccountMove(models.Model):
                     update_vals["signed_on"] = fields.Datetime.now()
                 if update_vals:
                     move.write(update_vals)
-                move._reza_fsm_attach_signed_credit_note()
+                if not move.env.context.get("reza_fsm_skip_signed_credit_note_attachment"):
+                    move._reza_fsm_attach_signed_credit_note()
         return result
 
     def action_post(self):

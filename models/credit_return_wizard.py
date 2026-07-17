@@ -133,6 +133,12 @@ class CreditReturnWizard(models.TransientModel):
             "invoice_date": fields.Date.context_today(self),
             "invoice_origin": self.task_id.name,
             "reza_fsm_task_id": self.task_id.id,
+        })
+        # Save the customer signature separately once the credit note exists.
+        # Account moves can add defaults during create, so writing this directly
+        # to the new record guarantees the Tax Credit Note report receives it.
+        # The signed PDF is attached once after posting below.
+        move.with_context(reza_fsm_skip_signed_credit_note_attachment=True).write({
             "signature": self.signature,
             "signed_by": self.signed_by or self.partner_id.name,
             "signed_on": self.signed_on or fields.Datetime.now(),
@@ -386,9 +392,14 @@ class CreditReturnWizard(models.TransientModel):
                 and (not location.company_id or location.company_id == company)
             )
         )
-        # Reps may only return to their assigned van/shed locations.  Do not
-        # expose the Liaise main warehouse as a return destination here.
-        return assigned_locations
+        # Reps may only return to their assigned van/shed locations.  Even if
+        # a warehouse stock location was assigned in the user setup, never
+        # expose a Liaise warehouse's root Stock location (for example,
+        # LWH/Stock) as a credit-return destination.
+        warehouse_stock_locations = self.env["stock.warehouse"].sudo().search([
+            ("company_id", "=", company.id),
+        ]).mapped("lot_stock_id")
+        return assigned_locations - warehouse_stock_locations
 
 
 class CreditReturnSignatureWizard(models.TransientModel):
