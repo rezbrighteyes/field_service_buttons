@@ -31,6 +31,14 @@ class AccountMove(models.Model):
         max_width=1024,
         max_height=1024,
     )
+    reza_fsm_customer_signature = fields.Image(
+        string="FSM Customer Signature",
+        copy=False,
+        readonly=True,
+        attachment=True,
+        max_width=1024,
+        max_height=1024,
+    )
     signed_by = fields.Char(
         string="Customer Signed By",
         copy=False,
@@ -41,24 +49,40 @@ class AccountMove(models.Model):
         copy=False,
         readonly=True,
     )
+    reza_fsm_customer_signed_by = fields.Char(
+        string="FSM Customer Signed By",
+        copy=False,
+        readonly=True,
+    )
+    reza_fsm_customer_signed_on = fields.Datetime(
+        string="FSM Customer Signed On",
+        copy=False,
+        readonly=True,
+    )
     is_signed = fields.Boolean(string="Is Signed", compute="_compute_is_signed")
 
-    @api.depends("signature")
+    @api.depends("signature", "reza_fsm_customer_signature")
     def _compute_is_signed(self):
         for move in self:
-            move.is_signed = bool(move.signature)
+            move.is_signed = bool(
+                move.reza_fsm_customer_signature or move.signature
+            )
 
     def write(self, vals):
         result = super().write(vals)
-        if vals.get("signature"):
+        if vals.get("signature") or vals.get("reza_fsm_customer_signature"):
             for move in self.filtered(
                 lambda credit_note: credit_note._reza_fsm_is_signable_credit_note()
             ):
                 update_vals = {}
-                if not move.signed_by:
-                    update_vals["signed_by"] = move.partner_id.name
-                if not move.signed_on:
-                    update_vals["signed_on"] = fields.Datetime.now()
+                if not move.reza_fsm_customer_signed_by:
+                    update_vals["reza_fsm_customer_signed_by"] = (
+                        move.signed_by or move.partner_id.name
+                    )
+                if not move.reza_fsm_customer_signed_on:
+                    update_vals["reza_fsm_customer_signed_on"] = (
+                        move.signed_on or fields.Datetime.now()
+                    )
                 if update_vals:
                     move.write(update_vals)
                 if not move.env.context.get("reza_fsm_skip_signed_credit_note_attachment"):
@@ -83,13 +107,21 @@ class AccountMove(models.Model):
             )
         except Exception:
             _logger.exception("Could not attach signed credit note PDF for %s", self.display_name)
-            self.message_post(body=_("Credit note signed by %s.") % (self.signed_by or self.partner_id.name))
+            self.message_post(body=_("Credit note signed by %s.") % (
+                self.reza_fsm_customer_signed_by
+                or self.signed_by
+                or self.partner_id.name
+            ))
             return False
 
         filename = "%s_signed_credit_note" % (self.name or self.display_name)
         self.message_post(
             attachments=[("%s.pdf" % filename, report[0])],
-            body=_("Credit note signed by %s.") % (self.signed_by or self.partner_id.name),
+            body=_("Credit note signed by %s.") % (
+                self.reza_fsm_customer_signed_by
+                or self.signed_by
+                or self.partner_id.name
+            ),
         )
         return True
 

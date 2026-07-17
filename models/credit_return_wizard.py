@@ -139,9 +139,9 @@ class CreditReturnWizard(models.TransientModel):
         # to the new record guarantees the Tax Credit Note report receives it.
         # The signed PDF is attached once after posting below.
         move.with_context(reza_fsm_skip_signed_credit_note_attachment=True).write({
-            "signature": self.signature,
-            "signed_by": self.signed_by or self.partner_id.name,
-            "signed_on": self.signed_on or fields.Datetime.now(),
+            "reza_fsm_customer_signature": self.signature,
+            "reza_fsm_customer_signed_by": self.signed_by or self.partner_id.name,
+            "reza_fsm_customer_signed_on": self.signed_on or fields.Datetime.now(),
         })
 
         for wizard_line in lines:
@@ -216,6 +216,14 @@ class CreditReturnWizard(models.TransientModel):
         """Render a rep-accessible PDF without exposing account.move to the rep."""
         self.ensure_one()
         move = self._get_confirmed_credit_note()
+        # Repair an already-confirmed return when it was signed before the
+        # dedicated credit-note signature fields were introduced.
+        if self.signature and not move.reza_fsm_customer_signature:
+            move.with_context(reza_fsm_skip_signed_credit_note_attachment=True).write({
+                "reza_fsm_customer_signature": self.signature,
+                "reza_fsm_customer_signed_by": self.signed_by or self.partner_id.name,
+                "reza_fsm_customer_signed_on": self.signed_on or fields.Datetime.now(),
+            })
         filename = "%s_credit_note.pdf" % (move.name or self.credit_note_name)
         Attachment = self.env["ir.attachment"].sudo()
         attachment = Attachment.search([
@@ -223,15 +231,18 @@ class CreditReturnWizard(models.TransientModel):
             ("res_id", "=", self.task_id.id),
             ("name", "=", filename),
         ], limit=1)
-        if attachment:
-            return attachment
-
         report = self.env["ir.actions.report"].sudo().with_company(
             self.company_id
         ).with_context(allowed_company_ids=[self.company_id.id])
         pdf, _content_type = report._render_qweb_pdf(
             "account.account_invoices", move.id
         )
+        if attachment:
+            attachment.write({
+                "datas": base64.b64encode(pdf),
+                "mimetype": "application/pdf",
+            })
+            return attachment
         return Attachment.create({
             "name": filename,
             "type": "binary",
