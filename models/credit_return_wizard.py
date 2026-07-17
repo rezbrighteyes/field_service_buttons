@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import base64
+
 from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
 from odoo.osv import expression
@@ -24,10 +26,12 @@ class CreditReturnWizard(models.TransientModel):
         readonly=True,
     )
     state = fields.Selection(
-        [("draft", "Draft")],
+        [("draft", "Draft"), ("done", "Confirmed")],
         default="draft",
         readonly=True,
     )
+    credit_note_id = fields.Integer(copy=False, readonly=True)
+    credit_note_name = fields.Char(string="Credit Note", copy=False, readonly=True)
     allowed_return_location_ids = fields.Many2many(
         "stock.location",
         compute="_compute_allowed_return_location_ids",
@@ -104,6 +108,10 @@ class CreditReturnWizard(models.TransientModel):
         # may perform.  Keep their normal account.move access unchanged.
         self.task_id.check_access_rights("read")
         self.task_id.check_access_rule("read")
+        if self.state == "done" or self.credit_note_id:
+            raise ValidationError(_(
+                "This credit return has already been confirmed as %s."
+            ) % (self.credit_note_name or _("a credit note")))
         if not self.partner_id:
             raise ValidationError(_("This task has no customer set."))
         if not self.signature:
@@ -168,14 +176,97 @@ class CreditReturnWizard(models.TransientModel):
 
         move.action_post()
         move._reza_fsm_attach_signed_credit_note()
+        self.write({
+            "state": "done",
+            "credit_note_id": move.id,
+            "credit_note_name": move.name,
+        })
 
         return {
             "type": "ir.actions.act_window",
-            "name": _("Field Service Task"),
-            "res_model": "project.task",
-            "res_id": self.task_id.id,
+            "name": _("Credit / Return"),
+            "res_model": self._name,
+            "res_id": self.id,
             "view_mode": "form",
             "target": "current",
+        }
+
+    def _get_confirmed_credit_note(self):
+        self.ensure_one()
+        self.task_id.check_access_rights("read")
+        self.task_id.check_access_rule("read")
+        if not self.credit_note_id:
+            raise ValidationError(_("Confirm the credit return before printing or emailing it."))
+        move = self.env["account.move"].sudo().browse(self.credit_note_id).exists()
+        if (
+            not move
+            or move.move_type != "out_refund"
+            or move.reza_fsm_task_id.id != self.task_id.id
+        ):
+            raise ValidationError(_("The confirmed credit note is no longer available."))
+        return move
+
+    def _create_credit_note_pdf_attachment(self):
+        """Render a rep-accessible PDF without exposing account.move to the rep."""
+        self.ensure_one()
+        move = self._get_confirmed_credit_note()
+        filename = "%s_credit_note.pdf" % (move.name or self.credit_note_name)
+        Attachment = self.env["ir.attachment"].sudo()
+        attachment = Attachment.search([
+            ("res_model", "=", "project.task"),
+            ("res_id", "=", self.task_id.id),
+            ("name", "=", filename),
+        ], limit=1)
+        if attachment:
+            return attachment
+
+        report = self.env["ir.actions.report"].sudo().with_company(
+            self.company_id
+        ).with_context(allowed_company_ids=[self.company_id.id])
+        pdf, _content_type = report._render_qweb_pdf(
+            "account.account_invoices", move.id
+        )
+        return Attachment.create({
+            "name": filename,
+            "type": "binary",
+            "datas": base64.b64encode(pdf),
+            "mimetype": "application/pdf",
+            "res_model": "project.task",
+            "res_id": self.task_id.id,
+        })
+
+    def action_print_credit_note(self):
+        self.ensure_one()
+        attachment = self._create_credit_note_pdf_attachment()
+        return {
+            "type": "ir.actions.act_url",
+            "url": "/web/content/%s?download=true" % attachment.id,
+            "target": "self",
+        }
+
+    def action_open_send_credit_note(self):
+        self.ensure_one()
+        move = self._get_confirmed_credit_note()
+        email_to = (move.partner_id.email or "").strip()
+        if not email_to:
+            raise ValidationError(_(
+                "Add an email address to %s before sending this credit note."
+            ) % move.partner_id.display_name)
+        send_wizard = self.env["reza.fsm.credit.return.send.wizard"].create({
+            "credit_return_wizard_id": self.id,
+            "email_to": email_to,
+            "subject": _("Credit Note %s") % move.name,
+            "body_html": _(
+                "<p>Please find your credit note attached.</p>"
+            ),
+        })
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Email Credit Note"),
+            "res_model": "reza.fsm.credit.return.send.wizard",
+            "res_id": send_wizard.id,
+            "view_mode": "form",
+            "target": "new",
         }
 
     def action_cancel_credit_return(self):
@@ -295,10 +386,9 @@ class CreditReturnWizard(models.TransientModel):
                 and (not location.company_id or location.company_id == company)
             )
         )
-        warehouse_locations = self.env["stock.warehouse"].sudo().search([
-            ("company_id", "=", company.id),
-        ]).mapped("lot_stock_id")
-        return assigned_locations | warehouse_locations
+        # Reps may only return to their assigned van/shed locations.  Do not
+        # expose the Liaise main warehouse as a return destination here.
+        return assigned_locations
 
 
 class CreditReturnSignatureWizard(models.TransientModel):
@@ -340,6 +430,64 @@ class CreditReturnSignatureWizard(models.TransientModel):
             "name": _("Credit / Return"),
             "res_model": wizard._name,
             "res_id": wizard.id,
+            "view_mode": "form",
+            "target": "current",
+        }
+
+
+class CreditReturnSendWizard(models.TransientModel):
+    _name = "reza.fsm.credit.return.send.wizard"
+    _description = "Email Field Service Credit Note"
+
+    credit_return_wizard_id = fields.Many2one(
+        "reza.fsm.credit.return.wizard",
+        required=True,
+        readonly=True,
+        ondelete="cascade",
+    )
+    partner_id = fields.Many2one(
+        related="credit_return_wizard_id.partner_id",
+        string="Customer",
+        readonly=True,
+    )
+    email_to = fields.Char(string="Email To", required=True)
+    subject = fields.Char(required=True)
+    body_html = fields.Html(string="Message", required=True)
+
+    def action_send_credit_note(self):
+        self.ensure_one()
+        credit_return = self.credit_return_wizard_id.exists()
+        if not credit_return:
+            raise ValidationError(_("This credit return is no longer available."))
+        email_to = (self.email_to or "").strip()
+        if not email_to:
+            raise ValidationError(_("Enter the customer email address."))
+        move = credit_return._get_confirmed_credit_note()
+        attachment = credit_return._create_credit_note_pdf_attachment()
+        email_from = (
+            credit_return.company_id.partner_id.email_formatted
+            or self.env.user.email_formatted
+            or self.env.user.email
+        )
+        if not email_from:
+            raise ValidationError(_("No sender email address is configured."))
+        self.env["mail.mail"].sudo().create({
+            "subject": self.subject,
+            "body_html": self.body_html,
+            "email_to": email_to,
+            "email_from": email_from,
+            "auto_delete": False,
+            "attachment_ids": [(4, attachment.id)],
+        })
+        credit_return.task_id.sudo().message_post(
+            body=_("Credit note %s was queued for %s.") % (move.name, email_to),
+            subtype_xmlid="mail.mt_note",
+        )
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Credit / Return"),
+            "res_model": credit_return._name,
+            "res_id": credit_return.id,
             "view_mode": "form",
             "target": "current",
         }

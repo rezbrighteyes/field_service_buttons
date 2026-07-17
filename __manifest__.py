@@ -3,7 +3,7 @@
 # noop: rebuild trigger 2
 {
     'name': 'Reza Field Service Buttons',
-    'version': '19.0.1.0.2',
+    'version': '19.0.1.0.3',
     'summary': 'Adds Order and Credit Note buttons to Field Service sub-tasks',
     'author': 'Reza',
     'category': 'Field Service',

@@ -11,19 +11,35 @@
                         string="Create &amp; Confirm Credit Note"
                         type="object"
                         class="btn-secondary"
+                        invisible="state == 'done'"
                     />
                     <button
                         name="action_add_from_catalog"
                         string="Add Products"
                         type="object"
                         class="btn-secondary"
+                        invisible="state == 'done'"
                     />
                     <button
                         name="action_open_signature"
                         string="Sign Credit Return"
                         type="object"
                         class="btn-secondary"
-                        invisible="is_signed"
+                        invisible="is_signed or state == 'done'"
+                    />
+                    <button
+                        name="action_print_credit_note"
+                        string="Print Credit Note"
+                        type="object"
+                        class="btn-secondary"
+                        invisible="state != 'done'"
+                    />
+                    <button
+                        name="action_open_send_credit_note"
+                        string="Email Credit Note"
+                        type="object"
+                        class="btn-primary"
+                        invisible="state != 'done'"
                     />
                     <button
                         name="action_cancel_credit_return"
@@ -38,13 +54,15 @@
                         <field name="partner_id"/>
                         <field name="company_id"/>
                         <field name="state" invisible="1"/>
+                        <field name="credit_note_id" invisible="1"/>
+                        <field name="credit_note_name" readonly="1" invisible="not credit_note_name"/>
                         <field name="is_signed" invisible="1"/>
                         <field name="signed_by" readonly="1" invisible="not signature"/>
                         <field name="signed_on" readonly="1" invisible="not signature"/>
                         <field name="signature" widget="image" readonly="1" invisible="not signature"/>
                         <field name="allowed_return_location_ids" invisible="1"/>
                     </group>
-                    <field name="line_ids" nolabel="1">
+                    <field name="line_ids" nolabel="1" readonly="state == 'done'">
                         <list editable="bottom" create="0">
                             <field name="allowed_return_location_ids" column_invisible="True"/>
                             <field name="product_id" readonly="1"/>
@@ -77,6 +95,33 @@
                         </list>
                     </field>
                 </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_reza_fsm_credit_return_send_wizard_form" model="ir.ui.view">
+        <field name="name">reza.fsm.credit.return.send.wizard.form</field>
+        <field name="model">reza.fsm.credit.return.send.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Email Credit Note">
+                <sheet>
+                    <group>
+                        <field name="credit_return_wizard_id" invisible="1"/>
+                        <field name="partner_id"/>
+                        <field name="email_to"/>
+                        <field name="subject"/>
+                        <field name="body_html" widget="html"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button
+                        name="action_send_credit_note"
+                        string="Send Credit Note"
+                        type="object"
+                        class="btn-primary"
+                    />
+                    <button string="Cancel" special="cancel" class="btn-secondary"/>
+                </footer>
             </form>
         </field>
     </record>
