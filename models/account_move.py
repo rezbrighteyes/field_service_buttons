@@ -51,7 +51,9 @@ class AccountMove(models.Model):
     def write(self, vals):
         result = super().write(vals)
         if vals.get("signature"):
-            for move in self.filtered("_reza_fsm_is_signable_credit_note"):
+            for move in self.filtered(
+                lambda credit_note: credit_note._reza_fsm_is_signable_credit_note()
+            ):
                 update_vals = {}
                 if not move.signed_by:
                     update_vals["signed_by"] = move.partner_id.name

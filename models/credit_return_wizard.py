@@ -275,6 +275,23 @@ class CreditReturnWizard(models.TransientModel):
             "target": "new",
         }
 
+    def action_open_customer_run(self):
+        """Return the rep to the parent customer run for this visit."""
+        self.ensure_one()
+        self.task_id.check_access_rights("read")
+        self.task_id.check_access_rule("read")
+        customer_run = self.task_id.parent_id or self.task_id
+        customer_run.check_access_rights("read")
+        customer_run.check_access_rule("read")
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Customer Runs"),
+            "res_model": "project.task",
+            "res_id": customer_run.id,
+            "view_mode": "form",
+            "target": "current",
+        }
+
     def action_cancel_credit_return(self):
         self.ensure_one()
         return {

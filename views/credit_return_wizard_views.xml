@@ -42,6 +42,13 @@
                         invisible="state != 'done'"
                     />
                     <button
+                        name="action_open_customer_run"
+                        string="Customer Runs"
+                        type="object"
+                        class="btn-secondary"
+                        invisible="state != 'done'"
+                    />
+                    <button
                         name="action_cancel_credit_return"
                         string="Cancel"
                         type="object"
