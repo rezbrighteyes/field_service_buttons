@@ -42,8 +42,8 @@
                         invisible="state != 'done'"
                     />
                     <button
-                        name="action_open_customer_run"
-                        string="Customer Runs"
+                        name="action_open_customer_task"
+                        string="Back to Task"
                         type="object"
                         class="btn-secondary"
                         invisible="state != 'done'"
