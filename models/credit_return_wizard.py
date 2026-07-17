@@ -66,6 +66,25 @@ class CreditReturnWizard(models.TransientModel):
                     super(CreditReturnWizard, wizard).write(update_vals)
         return result
 
+    def action_open_signature(self):
+        """Open signing only after the editable return lines have been saved."""
+        self.ensure_one()
+        lines = self.line_ids.filtered("product_id")
+        if not lines:
+            raise ValidationError(_("Add at least one product before signing the credit return."))
+        lines._validate_credit_return_lines()
+        signature_wizard = self.env["reza.fsm.credit.return.signature.wizard"].create({
+            "credit_return_wizard_id": self.id,
+        })
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Customer Signature"),
+            "res_model": "reza.fsm.credit.return.signature.wizard",
+            "res_id": signature_wizard.id,
+            "view_mode": "form",
+            "target": "new",
+        }
+
     @api.depends("task_id", "company_id")
     def _compute_allowed_return_location_ids(self):
         for wizard in self:
@@ -81,6 +100,10 @@ class CreditReturnWizard(models.TransientModel):
 
     def action_create_credit_note(self):
         self.ensure_one()
+        # This controlled workflow is the only accounting operation field reps
+        # may perform.  Keep their normal account.move access unchanged.
+        self.task_id.check_access_rights("read")
+        self.task_id.check_access_rule("read")
         if not self.partner_id:
             raise ValidationError(_("This task has no customer set."))
         if not self.signature:
@@ -90,7 +113,11 @@ class CreditReturnWizard(models.TransientModel):
             raise ValidationError(_("Add at least one product."))
         lines._validate_credit_return_lines()
 
-        move = self.env["account.move"].with_company(self.company_id).create({
+        actor_id = self.env.user.id
+        Move = self.env["account.move"].sudo().with_company(self.company_id)
+        MoveLine = self.env["account.move.line"].sudo().with_company(self.company_id)
+        Event = self.env["reza.fsm.credit.return.event"].sudo().with_company(self.company_id)
+        move = Move.create({
             "move_type": "out_refund",
             "partner_id": self.partner_id.id,
             "partner_shipping_id": self.partner_id.id,
@@ -103,10 +130,9 @@ class CreditReturnWizard(models.TransientModel):
             "signed_on": self.signed_on or fields.Datetime.now(),
         })
 
-        Event = self.env["reza.fsm.credit.return.event"].with_company(self.company_id)
         for wizard_line in lines:
             product_uom = wizard_line.product_uom_id or wizard_line.product_id.uom_id
-            move_line = self.env["account.move.line"].with_company(self.company_id).create({
+            move_line = MoveLine.create({
                 "move_id": move.id,
                 "product_id": wizard_line.product_id.id,
                 "quantity": wizard_line.quantity,
@@ -128,7 +154,7 @@ class CreditReturnWizard(models.TransientModel):
                 "move_line_id": move_line.id,
                 "task_id": self.task_id.id,
                 "partner_id": self.partner_id.id,
-                "user_id": self.env.user.id,
+                "user_id": actor_id,
                 "company_id": self.company_id.id,
                 "product_id": wizard_line.product_id.id,
                 "product_uom_id": product_uom.id,
@@ -140,14 +166,14 @@ class CreditReturnWizard(models.TransientModel):
             })
             move_line.write({"reza_fsm_credit_return_event_id": event.id})
 
-        move.sudo().action_post()
-        move.sudo()._reza_fsm_attach_signed_credit_note()
+        move.action_post()
+        move._reza_fsm_attach_signed_credit_note()
 
         return {
             "type": "ir.actions.act_window",
-            "name": _("Credit Note"),
-            "res_model": "account.move",
-            "res_id": move.id,
+            "name": _("Field Service Task"),
+            "res_model": "project.task",
+            "res_id": self.task_id.id,
             "view_mode": "form",
             "target": "current",
         }
@@ -273,6 +299,50 @@ class CreditReturnWizard(models.TransientModel):
             ("company_id", "=", company.id),
         ]).mapped("lot_stock_id")
         return assigned_locations | warehouse_locations
+
+
+class CreditReturnSignatureWizard(models.TransientModel):
+    _name = "reza.fsm.credit.return.signature.wizard"
+    _description = "Field Service Credit Return Signature"
+
+    credit_return_wizard_id = fields.Many2one(
+        "reza.fsm.credit.return.wizard",
+        required=True,
+        readonly=True,
+        ondelete="cascade",
+    )
+    partner_id = fields.Many2one(
+        related="credit_return_wizard_id.partner_id",
+        string="Customer",
+        readonly=True,
+    )
+    signature = fields.Image(
+        string="Customer Signature",
+        required=True,
+        max_width=1024,
+        max_height=1024,
+    )
+
+    def action_confirm_signature(self):
+        self.ensure_one()
+        wizard = self.credit_return_wizard_id.exists()
+        if not wizard:
+            raise ValidationError(_("This credit return is no longer available."))
+        wizard.task_id.check_access_rights("read")
+        wizard.task_id.check_access_rule("read")
+        wizard.write({
+            "signature": self.signature,
+            "signed_by": wizard.partner_id.name,
+            "signed_on": fields.Datetime.now(),
+        })
+        return {
+            "type": "ir.actions.act_window",
+            "name": _("Credit / Return"),
+            "res_model": wizard._name,
+            "res_id": wizard.id,
+            "view_mode": "form",
+            "target": "current",
+        }
 
 
 class CreditReturnWizardLine(models.TransientModel):
