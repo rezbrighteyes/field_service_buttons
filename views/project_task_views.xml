@@ -25,6 +25,15 @@
                 />
             </button>
             <xpath expr="//sheet/*[1]" position="before">
+                <field name="fsm_partner_credit_control" invisible="1"/>
+                <div
+                    class="alert alert-danger d-flex align-items-start gap-2 mb-3"
+                    invisible="not fsm_partner_credit_control"
+                    role="alert"
+                >
+                    <i class="fa fa-ban"/>
+                    <span><strong>CREDIT HOLD</strong> — Customer is on credit hold. You can prepare the order, but confirmation is blocked until Accounts clears the hold.</span>
+                </div>
                 <div
                     class="alert alert-warning d-flex align-items-start gap-2 mb-3 o_fsm_reminder_banner"
                     invisible="not parent_id or not fsm_customer_activity_summary"

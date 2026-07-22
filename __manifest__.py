@@ -3,7 +3,7 @@
 # noop: rebuild trigger 2
 {
     'name': 'Reza Field Service Buttons',
-    'version': '19.0.1.0.8',
+    'version': '19.0.1.0.9',
     'summary': 'Adds Order and Credit Note buttons to Field Service sub-tasks',
     'author': 'Reza',
     'category': 'Field Service',
@@ -14,6 +14,7 @@
         'stock',
         'spreadsheet_dashboard',
         'd3_product_edbert',
+        'd3_credit_control',
         'reza_intercompany_warehouse',
     ],
     'data': [

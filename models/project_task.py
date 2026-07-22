@@ -99,6 +99,11 @@ class ProjectTask(models.Model):
         compute='_compute_fsm_customer_activity_summary',
         compute_sudo=True,
     )
+    fsm_partner_credit_control = fields.Boolean(
+        string='Customer Credit Hold',
+        related='partner_id.commercial_partner_id.credit_control',
+        readonly=True,
+    )
 
     @api.model
     def _reza_cleanup_fsm_date_search_defaults(self):

@@ -99,6 +99,19 @@ class TestProjectTaskStatusGuard(TransactionCase):
         self.assertEqual(order.user_id, self.env.user)
         self.assertEqual(order.company_id, self.child.company_id or self.env.company)
 
+    def test_task_credit_hold_flags_follow_commercial_partner(self):
+        self.partner.write({
+            'credit_control': True,
+        })
+        self.child.invalidate_recordset(['fsm_partner_credit_control'])
+        self.assertTrue(self.child.fsm_partner_credit_control)
+
+        self.partner.write({
+            'credit_control': False,
+        })
+        self.child.invalidate_recordset(['fsm_partner_credit_control'])
+        self.assertFalse(self.child.fsm_partner_credit_control)
+
     def test_next_visit_date_defaults_from_deadline_plus_six_weeks(self):
         task = self.Task.create({
             'name': 'Next Visit Task',
