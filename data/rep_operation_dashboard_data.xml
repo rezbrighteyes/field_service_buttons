@@ -401,10 +401,10 @@
   ],
   "customTableStyles": {},
   "chartOdooMenusReferences": {
-    "chart-exceptions-by-rep": "industry_fsm.fsm_menu_reporting",
-    "chart-status-by-rep": "industry_fsm.fsm_menu_reporting",
-    "chart-worksheet-compliance": "industry_fsm.fsm_menu_reporting",
-    "chart-credit-return-by-rep": "industry_fsm.fsm_menu_reporting"
+    "chart-exceptions-by-rep": "reza_field_service_buttons.menu_reza_fsm_rep_operation_report",
+    "chart-status-by-rep": "reza_field_service_buttons.menu_reza_fsm_rep_operation_report",
+    "chart-worksheet-compliance": "reza_field_service_buttons.menu_reza_fsm_rep_operation_report",
+    "chart-credit-return-by-rep": "reza_field_service_buttons.menu_reza_fsm_rep_operation_report"
   }
 }
         ]]></field>
