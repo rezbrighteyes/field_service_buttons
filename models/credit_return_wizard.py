@@ -1,10 +1,15 @@
 # -*- coding: utf-8 -*-
 import base64
 
+import logging
+
 from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
 from odoo.osv import expression
 from odoo.tools import float_compare
+
+
+_logger = logging.getLogger(__name__)
 
 
 class CreditReturnWizard(models.TransientModel):
@@ -347,7 +352,7 @@ class CreditReturnWizard(models.TransientModel):
         product_catalog = super()._get_product_catalog_order_data(products, **kwargs)
         for product in products:
             product_catalog[product.id].update({
-                "price": product.lst_price,
+                "price": self._reza_credit_price(product),
                 "quantity": 0,
             })
         return product_catalog
@@ -380,12 +385,12 @@ class CreditReturnWizard(models.TransientModel):
             precision_rounding=product.uom_id.rounding or 0.01,
         ) <= 0:
             lines_for_product.unlink()
-            return product.lst_price
+            return self._reza_credit_price(product)
 
         values = {
             "quantity": quantity,
             "product_uom_id": product.uom_id.id,
-            "price_unit": product.lst_price,
+            "price_unit": self._reza_credit_price(product, quantity),
         }
         if line:
             line.write(values)
@@ -395,7 +400,46 @@ class CreditReturnWizard(models.TransientModel):
                 "wizard_id": self.id,
                 "product_id": product.id,
             })
-        return product.lst_price
+        return self._reza_credit_price(product, quantity)
+
+    def _reza_credit_price(self, product, quantity=1.0):
+        """The price this customer is actually owed for one unit.
+
+        The credit-return flow used to hand back ``product.lst_price`` -- the
+        catalogue price -- ignoring the customer's pricelist entirely. For a
+        customer on a 15% pricelist that credits 15% more than they paid, and
+        because the created move line passes ``price_unit`` in its create
+        values, the line is protected from ``_compute_price_unit`` and
+        ``d3_product_rrp``'s pricelist logic can never correct it. Measured on
+        production 2026-08-04: $375.72 over-credited across four notes.
+
+        Falls back to the catalogue price whenever a pricelist cannot be
+        resolved, which is the same value as before -- so this can only ever
+        move a price toward what the customer was charged, never away from it.
+        """
+        if not product:
+            return 0.0
+        company = self.company_id or self.env.company
+        product = product.with_company(company)
+        partner = self.partner_id
+        if not partner:
+            return product.lst_price
+        pricelist = partner.with_company(company).property_product_pricelist
+        if not pricelist:
+            return product.lst_price
+        try:
+            price = pricelist._get_product_price(
+                product, quantity or 1.0, uom=product.uom_id,
+            )
+        except Exception:  # noqa: BLE001 - a price lookup must never block a credit
+            _logger.exception(
+                "FSM credit return: pricelist lookup failed for product %s; "
+                "falling back to the catalogue price.", product.id,
+            )
+            return product.lst_price
+        if price is None or price < 0:
+            return product.lst_price
+        return price
 
     def _get_allowed_return_locations(self):
         self.ensure_one()
@@ -610,7 +654,9 @@ class CreditReturnWizardLine(models.TransientModel):
     def _onchange_product_id(self):
         if self.product_id:
             self.product_uom_id = self.product_id.uom_id
-            self.price_unit = self.product_id.lst_price
+            self.price_unit = self.wizard_id._reza_credit_price(
+                self.product_id, self.quantity or 1.0,
+            )
 
     @api.onchange("outcome")
     def _onchange_outcome(self):
