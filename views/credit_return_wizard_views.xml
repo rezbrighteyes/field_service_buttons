@@ -36,10 +36,11 @@
                     />
                     <button
                         name="action_open_send_credit_note"
-                        string="Email Credit Note"
+                        string="Re-send Credit Note"
                         type="object"
                         class="btn-primary"
                         invisible="state != 'done'"
+                        help="The credit note is emailed to the customer automatically when it is confirmed. Use this only to send it again or to a different address."
                     />
                     <button
                         name="action_open_customer_task"
@@ -56,6 +57,11 @@
                     />
                 </header>
                 <sheet>
+                    <div class="alert alert-info" role="status" invisible="state != 'done'">
+                        This credit note is emailed to the customer automatically.
+                        Use <b>Re-send Credit Note</b> only to send it again or to a
+                        different address.
+                    </div>
                     <group>
                         <field name="task_id"/>
                         <field name="partner_id"/>

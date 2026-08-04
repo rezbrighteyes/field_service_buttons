@@ -3,7 +3,7 @@ import base64
 
 import logging
 
-from odoo import _, api, fields, models
+from odoo import SUPERUSER_ID, _, api, fields, models
 from odoo.exceptions import ValidationError
 from odoo.osv import expression
 from odoo.tools import float_compare
@@ -192,6 +192,7 @@ class CreditReturnWizard(models.TransientModel):
             "credit_note_id": move.id,
             "credit_note_name": move.name,
         })
+        self._reza_fsm_schedule_credit_note_email(move)
 
         return {
             "type": "ir.actions.act_window",
@@ -201,6 +202,70 @@ class CreditReturnWizard(models.TransientModel):
             "view_mode": "form",
             "target": "current",
         }
+
+    def _reza_fsm_schedule_credit_note_email(self, move):
+        """Email the customer once this transaction has safely committed.
+
+        Sending inline would put the credit note in the customer's inbox before
+        the transaction that created it is durable, and mail.mail._send re-raises
+        SMTPServerDisconnected before it honours raise_exception=False - so a
+        transient Microsoft 365 fault would roll the whole credit return back.
+        A post-commit callback runs after the commit, on its own cursor, and is
+        discarded for free if this transaction is rolled back instead.
+        """
+        self.ensure_one()
+        task = self.task_id
+        if not move:
+            return False
+        if not move.partner_id.email:
+            task.sudo().message_post(
+                body=_(
+                    "Credit note %s was not emailed: the customer has no email "
+                    "address. Add one and use Re-send Credit Note."
+                ) % (move.name or ""),
+                subtype_xmlid="mail.mt_note",
+            )
+            return False
+
+        move_id = move.id
+        task_id = task.id
+        author_id = self.env.user.partner_id.id
+        registry = self.env.registry
+
+        def _send():
+            # Callbacks.run() does not guard callbacks, so an exception escaping
+            # here would break the request that just committed the credit note.
+            try:
+                with registry.cursor() as cr:
+                    send_env = api.Environment(cr, SUPERUSER_ID, {})
+                    credit_note = send_env["account.move"].browse(move_id).exists()
+                    if not credit_note:
+                        return
+                    mail = credit_note._reza_fsm_send_credit_note_email(
+                        author_id=author_id
+                    )
+                    if mail:
+                        body = _("Credit note %s was emailed to %s.") % (
+                            credit_note.name,
+                            mail.email_to,
+                        )
+                    else:
+                        body = _(
+                            "Credit note %s could not be emailed. Use Re-send "
+                            "Credit Note or ask the office to check the mail setup."
+                        ) % (credit_note.name,)
+                    send_env["project.task"].browse(task_id).message_post(
+                        body=body,
+                        subtype_xmlid="mail.mt_note",
+                        author_id=author_id,
+                    )
+            except Exception:
+                _logger.exception(
+                    "Could not email FSM credit note %s to the customer", move_id
+                )
+
+        self.env.cr.postcommit.add(_send)
+        return True
 
     def _get_confirmed_credit_note(self):
         self.ensure_one()
@@ -277,10 +342,8 @@ class CreditReturnWizard(models.TransientModel):
         send_wizard = self.env["reza.fsm.credit.return.send.wizard"].create({
             "credit_return_wizard_id": self.id,
             "email_to": email_to,
-            "subject": _("Credit Note %s") % move.name,
-            "body_html": _(
-                "<p>Please find your credit note attached.</p>"
-            ),
+            "subject": move._reza_fsm_credit_note_email_subject(),
+            "body_html": move._reza_fsm_credit_note_email_body(),
         })
         return {
             "type": "ir.actions.act_window",
@@ -543,24 +606,19 @@ class CreditReturnSendWizard(models.TransientModel):
         if not email_to:
             raise ValidationError(_("Enter the customer email address."))
         move = credit_return._get_confirmed_credit_note()
-        attachment = credit_return._create_credit_note_pdf_attachment()
-        email_from = (
-            credit_return.company_id.partner_id.email_formatted
-            or self.env.user.email_formatted
-            or self.env.user.email
+        mail = move._reza_fsm_send_credit_note_email(
+            email_to=email_to,
+            subject=self.subject,
+            body_html=self.body_html,
+            author_id=self.env.user.partner_id.id,
         )
-        if not email_from:
-            raise ValidationError(_("No sender email address is configured."))
-        self.env["mail.mail"].sudo().create({
-            "subject": self.subject,
-            "body_html": self.body_html,
-            "email_to": email_to,
-            "email_from": email_from,
-            "auto_delete": False,
-            "attachment_ids": [(4, attachment.id)],
-        })
+        if not mail:
+            raise ValidationError(_(
+                "The credit note could not be emailed. Ask the office to check "
+                "the outgoing mail settings."
+            ))
         credit_return.task_id.sudo().message_post(
-            body=_("Credit note %s was queued for %s.") % (move.name, email_to),
+            body=_("Credit note %s was emailed to %s.") % (move.name, email_to),
             subtype_xmlid="mail.mt_note",
         )
         return {
