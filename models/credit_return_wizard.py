@@ -217,6 +217,25 @@ class CreditReturnWizard(models.TransientModel):
         task = self.task_id
         if not move:
             return False
+        # Finance gate (2026-08-10): credit notes must be reviewed before the
+        # customer sees them, so automatic sending is OFF unless someone turns
+        # it on deliberately. Settings > Technical > System Parameters,
+        # `reza_fsm.credit_note_auto_send` = True re-enables it with no deploy.
+        # The note is still raised and posted; only the email is withheld, and
+        # the Re-send Credit Note button sends it by hand at any time.
+        auto_send = self.env["ir.config_parameter"].sudo().get_param(
+            "reza_fsm.credit_note_auto_send", "False"
+        )
+        if str(auto_send).strip().lower() not in ("true", "1", "yes"):
+            task.sudo().message_post(
+                body=_(
+                    "Credit note %s was NOT emailed to the customer: automatic "
+                    "sending is switched off pending finance review. Use "
+                    "Re-send Credit Note once the pricing has been checked."
+                ) % (move.name or ""),
+                subtype_xmlid="mail.mt_note",
+            )
+            return False
         if not move.partner_id.email:
             task.sudo().message_post(
                 body=_(

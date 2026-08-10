@@ -40,7 +40,7 @@
                         type="object"
                         class="btn-primary"
                         invisible="state != 'done'"
-                        help="The credit note is emailed to the customer automatically when it is confirmed. Use this only to send it again or to a different address."
+                        help="This credit note has NOT been emailed to the customer. Automatic sending is off pending finance review. Use this to send it once the pricing has been checked."
                     />
                     <button
                         name="action_open_customer_task"
@@ -58,9 +58,10 @@
                 </header>
                 <sheet>
                     <div class="alert alert-info" role="status" invisible="state != 'done'">
-                        This credit note is emailed to the customer automatically.
-                        Use <b>Re-send Credit Note</b> only to send it again or to a
-                        different address.
+                        This credit note has <b>not</b> been emailed to the customer.
+                        Automatic sending is switched off pending finance review.
+                        Once the pricing has been checked, use
+                        <b>Re-send Credit Note</b> to send it.
                     </div>
                     <group>
                         <field name="task_id"/>
