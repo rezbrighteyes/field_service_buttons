@@ -319,21 +319,28 @@ class ProjectTask(models.Model):
         if not value or operator in expression.NEGATIVE_TERM_OPERATORS:
             return domain
 
+        # Skip any partner field this Odoo version no longer has.  `mobile` was
+        # removed in 19 and searching it raised ValueError, which took out every
+        # task search and every task many2one dropdown - the search bar answered
+        # with a traceback rather than no results, so it read as Odoo being down.
+        Partner = self.env["res.partner"]
+        partner_field_names = (
+            "name",
+            "complete_name",
+            "city",
+            "street",
+            "street2",
+            "ref",
+            "phone",
+            "mobile",
+            "email",
+        )
         extra_domains = [
-            [(field_name, operator, value)]
-            for field_name in (
-                'partner_id.name',
-                'partner_id.complete_name',
-                'partner_id.city',
-                'partner_id.street',
-                'partner_id.street2',
-                'partner_id.ref',
-                'partner_id.phone',
-                'partner_id.mobile',
-                'partner_id.email',
-                'parent_id.name',
-            )
+            [("partner_id.%s" % field_name, operator, value)]
+            for field_name in partner_field_names
+            if field_name in Partner._fields
         ]
+        extra_domains.append([("parent_id.name", operator, value)])
         return expression.OR([domain] + extra_domains)
 
     def _fsm_get_datetime_value(self, field_names):
