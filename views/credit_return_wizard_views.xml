@@ -28,21 +28,6 @@
                         invisible="is_signed or state == 'done'"
                     />
                     <button
-                        name="action_print_credit_note"
-                        string="Print Credit Note"
-                        type="object"
-                        class="btn-secondary"
-                        invisible="state != 'done'"
-                    />
-                    <button
-                        name="action_open_send_credit_note"
-                        string="Re-send Credit Note"
-                        type="object"
-                        class="btn-primary"
-                        invisible="state != 'done'"
-                        help="This credit note has NOT been emailed to the customer. Automatic sending is off pending finance review. Use this to send it once the pricing has been checked."
-                    />
-                    <button
                         name="action_open_customer_task"
                         string="Back to Task"
                         type="object"
@@ -59,9 +44,8 @@
                 <sheet>
                     <div class="alert alert-info" role="status" invisible="state != 'done'">
                         This credit note has <b>not</b> been emailed to the customer.
-                        Automatic sending is switched off pending finance review.
-                        Once the pricing has been checked, use
-                        <b>Re-send Credit Note</b> to send it.
+                        The office sends it from Accounting once the pricing has
+                        been checked.
                     </div>
                     <group>
                         <field name="task_id"/>

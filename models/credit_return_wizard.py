@@ -221,8 +221,9 @@ class CreditReturnWizard(models.TransientModel):
         # customer sees them, so automatic sending is OFF unless someone turns
         # it on deliberately. Settings > Technical > System Parameters,
         # `reza_fsm.credit_note_auto_send` = True re-enables it with no deploy.
-        # The note is still raised and posted; only the email is withheld, and
-        # the Re-send Credit Note button sends it by hand at any time.
+        # The note is still raised and posted; only the email is withheld. The
+        # office sends it by hand from the credit note in Accounting - the rep
+        # has no send button (2026-08-13).
         auto_send = self.env["ir.config_parameter"].sudo().get_param(
             "reza_fsm.credit_note_auto_send", "False"
         )
@@ -230,8 +231,9 @@ class CreditReturnWizard(models.TransientModel):
             task.sudo().message_post(
                 body=_(
                     "Credit note %s was NOT emailed to the customer: automatic "
-                    "sending is switched off pending finance review. Use "
-                    "Re-send Credit Note once the pricing has been checked."
+                    "sending is switched off pending finance review. Send it "
+                    "from the credit note in Accounting once the pricing has "
+                    "been checked."
                 ) % (move.name or ""),
                 subtype_xmlid="mail.mt_note",
             )
@@ -240,7 +242,7 @@ class CreditReturnWizard(models.TransientModel):
             task.sudo().message_post(
                 body=_(
                     "Credit note %s was not emailed: the customer has no email "
-                    "address. Add one and use Re-send Credit Note."
+                    "address. Add one and send it from Accounting."
                 ) % (move.name or ""),
                 subtype_xmlid="mail.mt_note",
             )
@@ -270,8 +272,8 @@ class CreditReturnWizard(models.TransientModel):
                         )
                     else:
                         body = _(
-                            "Credit note %s could not be emailed. Use Re-send "
-                            "Credit Note or ask the office to check the mail setup."
+                            "Credit note %s could not be emailed. Send it from "
+                            "Accounting, or ask the office to check the mail setup."
                         ) % (credit_note.name,)
                     send_env["project.task"].browse(task_id).message_post(
                         body=body,
@@ -341,6 +343,10 @@ class CreditReturnWizard(models.TransientModel):
             "res_id": self.task_id.id,
         })
 
+    # Both buttons below were removed from the wizard header on 2026-08-13:
+    # reps neither print nor email their own credit notes, the office does both
+    # from the credit note in Accounting. The methods are kept so restoring the
+    # buttons is a view change alone.
     def action_print_credit_note(self):
         self.ensure_one()
         attachment = self._create_credit_note_pdf_attachment()
