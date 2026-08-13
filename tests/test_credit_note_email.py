@@ -102,6 +102,10 @@ class TestFSMCreditNoteEmail(TransactionCase):
         self.assertEqual(mail.email_to, 'manager@fsm-credit-test.example.com')
 
     def test_body_names_the_credit_note_and_amount(self):
+        # A draft move has no name yet, and `assertIn(False, body)` raises a
+        # TypeError rather than telling you the body was wrong.  Name it so the
+        # assertion tests the body instead of the fixture.
+        self.move.name = 'CRTEST/00001'
         body = self.move._reza_fsm_credit_note_email_body()
         self.assertIn(self.move.name, body)
         self.assertIn('%.2f' % self.move.amount_total, body)

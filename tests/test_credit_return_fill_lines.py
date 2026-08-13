@@ -148,6 +148,20 @@ class TestCreditReturnFillLines(TransactionCase):
             self.wizard.action_fill_return_lines()
 
     def test_fill_refuses_a_location_the_rep_is_not_allowed(self):
+        # An intercompany warehouse manager is allowed every internal location,
+        # so the guard cannot fire for one - and the account running the tests
+        # normally is one.  Stand the runner down to a plain rep for this test
+        # or it passes without ever reaching the check it exists to prove.
+        manager_group = self.env.ref(
+            'reza_intercompany_warehouse.group_intercompany_warehouse_manager'
+        )
+        if self.env.user.has_group(
+            'reza_intercompany_warehouse.group_intercompany_warehouse_manager'
+        ):
+            self.env.user.write({'group_ids': [(3, manager_group.id)]})
+            self.env.registry.clear_cache()
+            self.wizard.invalidate_recordset(['allowed_return_location_ids'])
+
         self._line(self.product_a)
         stranger = self.env['stock.location'].create({
             'name': 'Fill Test Someone Elses Van',
@@ -157,11 +171,11 @@ class TestCreditReturnFillLines(TransactionCase):
         # Written straight onto the record so the field domain cannot mask the
         # server-side guard, which is what an RPC caller would bypass.
         self.wizard.write({'bulk_return_location_id': stranger.id})
-        if stranger in self.wizard.allowed_return_location_ids:
-            self.skipTest(
-                'This user is an intercompany warehouse manager, so every '
-                'internal location is allowed and the guard cannot fire.'
-            )
+        self.assertNotIn(
+            stranger, self.wizard.allowed_return_location_ids,
+            'The fixture failed to stand the user down to a plain rep, so this '
+            'test would pass without exercising the guard.',
+        )
         with self.assertRaises(ValidationError):
             self.wizard.action_fill_return_lines()
 

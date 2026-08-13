@@ -36,6 +36,10 @@ class TestProjectTaskStatusGuard(TransactionCase):
         self.project = self.Project.create({
             'name': 'FSM Guard Project',
             'is_fsm': True,
+            # industry_fsm carries a database check constraint requiring a
+            # company on every FSM project.  Without this the whole class
+            # errors out in setUp and stops guarding anything.
+            'company_id': self.env.company.id,
         })
         self.partner = self.Partner.create({'name': 'FSM Guard Customer'})
 
@@ -152,7 +156,8 @@ class TestProjectTaskStatusGuard(TransactionCase):
 
         name_search_matches = self.Task.name_search(
             'Margate',
-            args=[('parent_id', '=', self.parent.id)],
+            # Odoo 19 renamed this argument from `args` to `domain`.
+            domain=[('parent_id', '=', self.parent.id)],
             limit=10,
         )
         self.assertIn(subtask.id, [task_id for task_id, _name in name_search_matches])
@@ -175,7 +180,10 @@ class TestProjectTaskStatusGuard(TransactionCase):
 
     def test_subtask_reminds_to_complete_worksheet_first(self):
         self.child.invalidate_recordset(['fsm_customer_activity_summary'])
-        self.assertIn('complete the worksheet', self.child.fsm_customer_activity_summary)
+        self.assertIn(
+            'complete the worksheet',
+            (self.child.fsm_customer_activity_summary or '').lower(),
+        )
 
     def test_subtask_reminds_to_mark_done_after_worksheet(self):
         with patch.object(type(self.child), '_fsm_has_worksheet_record', return_value=True):

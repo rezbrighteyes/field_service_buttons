@@ -38,6 +38,9 @@ class TestFSMChatterLock(TransactionCase):
         self.project = self.env['project.project'].create({
             'name': 'FSM Chatter Lock Project',
             'is_fsm': True,
+            # industry_fsm requires a company on every FSM project at the
+            # database level, so leaving it off errors the whole class.
+            'company_id': self.env.company.id,
         })
         self.task = self.env['project.task'].create({
             'name': 'FSM Chatter Lock Task',
