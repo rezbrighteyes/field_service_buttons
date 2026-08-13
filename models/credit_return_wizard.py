@@ -47,6 +47,28 @@ class CreditReturnWizard(models.TransientModel):
         "wizard_id",
         string="Products",
     )
+    bulk_return_location_id = fields.Many2one(
+        "stock.location",
+        string="Fill Return Location",
+        domain="[('id', 'in', allowed_return_location_ids)]",
+        copy=False,
+        help="Pick the van or shed, then press Fill Return Lines to apply it to "
+             "every Credit Return line. Credit Scrap lines are never touched.",
+    )
+    bulk_credit_reason_ids = fields.Many2many(
+        "reza.fsm.credit.return.reason",
+        "reza_fsm_credit_return_wizard_bulk_reason_rel",
+        "wizard_id",
+        "reason_id",
+        string="Fill Credit Reasons",
+        domain=[("reason_type", "in", ("credit", "both"))],
+        copy=False,
+    )
+    bulk_note = fields.Text(
+        string="Fill Note",
+        copy=False,
+        help="Optional. Required by the reasons that ask for a note (Other).",
+    )
     signature = fields.Image(
         string="Customer Signature",
         copy=False,
@@ -93,6 +115,48 @@ class CreditReturnWizard(models.TransientModel):
             "view_mode": "form",
             "target": "new",
         }
+
+    def action_fill_return_lines(self):
+        """Stamp one location / reason / note onto every Credit Return line.
+
+        Reps hand back a whole van load for the same reason, so keying the same
+        two fields onto twenty lines is where the mistakes happen.  Credit Scrap
+        lines are deliberately skipped - a scrap has no return location and its
+        reason comes from a different list.
+        """
+        self.ensure_one()
+        if self.state == "done":
+            raise ValidationError(_(
+                "This credit return has already been confirmed."
+            ))
+        location = self.bulk_return_location_id
+        reasons = self.bulk_credit_reason_ids
+        note = (self.bulk_note or "").strip()
+        if not location and not reasons and not note:
+            raise ValidationError(_(
+                "Choose a return location, a credit reason or a note to fill in first."
+            ))
+        if location and location not in self.allowed_return_location_ids:
+            raise ValidationError(_(
+                "%s is not one of your return locations."
+            ) % location.display_name)
+        lines = self.line_ids.filtered(
+            lambda line: line.product_id and line.outcome == "credit_return"
+        )
+        if not lines:
+            raise ValidationError(_(
+                "There are no Credit Return lines to fill in. Credit Scrap lines "
+                "are left alone on purpose."
+            ))
+        values = {}
+        if location:
+            values["return_location_id"] = location.id
+        if reasons:
+            values["credit_reason_ids"] = [(6, 0, reasons.ids)]
+        if note:
+            values["note"] = note
+        lines.write(values)
+        return False
 
     @api.depends("task_id", "company_id")
     def _compute_allowed_return_location_ids(self):

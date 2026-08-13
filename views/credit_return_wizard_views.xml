@@ -60,6 +60,23 @@
                         <field name="signature" widget="image" readonly="1" invisible="not signature"/>
                         <field name="allowed_return_location_ids" invisible="1"/>
                     </group>
+                    <div class="alert alert-light" role="status" invisible="state == 'done'">
+                        Pick a return location and reason below, then press
+                        <b>Fill Return Lines</b> to put them on every Credit Return
+                        line at once. Credit Scrap lines are left alone.
+                    </div>
+                    <group string="Fill Return Lines" invisible="state == 'done'">
+                        <field name="bulk_return_location_id"/>
+                        <field name="bulk_credit_reason_ids" widget="many2many_tags"/>
+                        <field name="bulk_note" placeholder="Optional note"/>
+                        <button
+                            name="action_fill_return_lines"
+                            string="Fill Return Lines"
+                            type="object"
+                            class="btn-primary"
+                            colspan="2"
+                        />
+                    </group>
                     <field name="line_ids" nolabel="1" readonly="state == 'done'">
                         <list editable="bottom" create="0">
                             <field name="allowed_return_location_ids" column_invisible="True"/>
