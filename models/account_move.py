@@ -132,19 +132,50 @@ class AccountMove(models.Model):
     # ------------------------------------------------------------------
     # Emailing the credit note to the customer
     # ------------------------------------------------------------------
+    @api.model
+    def _reza_fsm_mail_server_accepts(self, address):
+        """True when ir.mail_server would send this From unchanged.
+
+        Any address missing from a server's `from_filter` is rewritten to the
+        notification address, so asking the filter is the only way to know
+        whether a chosen sender survives the trip.  A filter entry may be a
+        whole domain as well as a full address - `mail.default.from_filter`
+        holds a bare domain on this database - so both forms are matched.
+        """
+        normalized = (address or "").strip().lower()
+        if "@" not in normalized:
+            return False
+        domain = normalized.rsplit("@", 1)[-1]
+        for server in self.env["ir.mail_server"].sudo().search([]):
+            for chunk in (server.from_filter or "").split(","):
+                chunk = chunk.strip().lower()
+                if not chunk:
+                    continue
+                if chunk == normalized or ("@" not in chunk and chunk == domain):
+                    return True
+        return False
+
     def _reza_fsm_credit_note_email_from(self):
         """Sender address the outgoing mail server will accept unchanged.
 
-        ir.mail_server rewrites any From that is missing from its from_filter,
-        and the from_filter on this database lists only the notifications@ and
-        bounce@ addresses of the three alias domains.  The company partner
-        address (sales@rockos.com.au for Liaise) is not one of them, so mail
-        sent from it went out branded as the Edbert notification address.  The
-        company's own alias domain holds the address the server is configured
-        to send as.
+        Prefer the company's Accounts mailbox, so a credit note a rep raises in
+        store comes from the same address as one the office emails from the
+        document form.  Odoo may only send as an address listed in the mail
+        server's from_filter - and where the tenant has not granted SendAs on
+        it, Microsoft refuses the message outright rather than rewriting it -
+        so the filter is consulted rather than assumed.  Edbert has no Accounts
+        mailbox and correctly falls through to its notifications alias.
+
+        The fallback is the company's own alias domain, which is what this
+        method used exclusively before: the company partner address
+        (sales@rockos.com.au for Liaise at the time) was not in the filter, so
+        mail sent from it went out branded as the Edbert notification address.
         """
         self.ensure_one()
         company = self.company_id or self.env.company
+        accounts_address = company.partner_id.email or company.email
+        if accounts_address and self._reza_fsm_mail_server_accepts(accounts_address):
+            return formataddr((company.name or "", accounts_address))
         address = company.alias_domain_id.default_from_email
         if not address:
             return False

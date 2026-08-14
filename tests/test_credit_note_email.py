@@ -50,15 +50,59 @@ class TestFSMCreditNoteEmail(TransactionCase):
         ])
 
     def test_email_from_uses_alias_domain_not_company_partner(self):
-        """The From must be the alias domain address the mail server sends as.
+        """An address the mail server would rewrite must not be used.
 
-        The company partner address is what the old code used, and it is not in
-        the server's from_filter, so Odoo silently rewrote it.
+        The company partner address is what the old code used, and where it is
+        absent from the server's from_filter Odoo silently rewrites it, so the
+        alias domain is the honest choice.
         """
         self.company.partner_id.email = 'sales@some-other-brand.example.com'
         email_from = self.move._reza_fsm_credit_note_email_from()
         self.assertIn('notifications@fsm-credit-test.example.com', email_from)
         self.assertNotIn('some-other-brand', email_from)
+
+    def test_email_from_prefers_accounts_address_the_server_may_send_as(self):
+        """A rep's credit note comes from Accounts, like the office's does.
+
+        Only when the outgoing server is configured to pass that address
+        through: otherwise it is rewritten and the alias is the truthful
+        answer, which the test above covers.
+        """
+        accounts = 'accounts@fsm-credit-test.example.com'
+        self.company.partner_id.email = accounts
+        self.env['ir.mail_server'].create({
+            'name': 'FSM credit test server',
+            'smtp_host': 'smtp.fsm-credit-test.example.com',
+            'from_filter': (
+                'notifications@fsm-credit-test.example.com, %s' % accounts
+            ),
+        })
+        email_from = self.move._reza_fsm_credit_note_email_from()
+        self.assertIn(accounts, email_from)
+        self.assertNotIn('notifications@', email_from)
+        self.assertIn(self.company.name, email_from)
+
+    def test_mail_server_accepts_matches_a_bare_domain_entry(self):
+        """A from_filter entry may be a whole domain, not only an address.
+
+        `mail.default.from_filter` holds a bare domain on this database, so a
+        matcher that only compared full addresses would answer False for an
+        address the server would in fact send unchanged.
+        """
+        Move = self.env['account.move']
+        self.env['ir.mail_server'].create({
+            'name': 'FSM credit test domain server',
+            'smtp_host': 'smtp.fsm-credit-test.example.com',
+            'from_filter': 'fsm-credit-test.example.com',
+        })
+        self.assertTrue(
+            Move._reza_fsm_mail_server_accepts('accounts@fsm-credit-test.example.com')
+        )
+        self.assertFalse(
+            Move._reza_fsm_mail_server_accepts('accounts@somewhere-else.example.com')
+        )
+        self.assertFalse(Move._reza_fsm_mail_server_accepts(''))
+        self.assertFalse(Move._reza_fsm_mail_server_accepts('not-an-address'))
 
     def test_reply_to_is_a_real_mailbox(self):
         """Replies go to the company mailbox, not Odoo's catchall."""
