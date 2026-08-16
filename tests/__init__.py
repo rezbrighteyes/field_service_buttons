@@ -4,3 +4,4 @@ from . import test_fsm_chatter_lock
 from . import test_rep_operation_dashboard
 from . import test_credit_note_email
 from . import test_credit_return_fill_lines
+from . import test_credit_scrap

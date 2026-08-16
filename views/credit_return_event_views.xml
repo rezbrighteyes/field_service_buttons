@@ -14,6 +14,8 @@
                 <field name="return_location_id"/>
                 <field name="credit_reason_ids" widget="many2many_tags"/>
                 <field name="scrap_reason_id"/>
+                <field name="scrap_id"/>
+                <field name="reza_scrap_error" optional="hide"/>
                 <field name="user_id"/>
                 <field name="move_id"/>
                 <field name="task_id"/>
@@ -27,7 +29,18 @@
         <field name="model">reza.fsm.credit.return.event</field>
         <field name="arch" type="xml">
             <form string="Credit Return">
+                <header>
+                    <button name="action_reza_fsm_create_scrap"
+                            type="object"
+                            string="Create Scrap Order"
+                            class="btn-primary"
+                            invisible="outcome != 'credit_scrap' or scrap_id"/>
+                </header>
                 <sheet>
+                    <div class="alert alert-warning" role="alert"
+                         invisible="not reza_scrap_error">
+                        <field name="reza_scrap_error" readonly="1" nolabel="1"/>
+                    </div>
                     <group>
                         <group>
                             <field name="date"/>
@@ -42,6 +55,7 @@
                             <field name="move_line_id"/>
                             <field name="task_id"/>
                             <field name="stock_move_id"/>
+                            <field name="scrap_id" invisible="outcome != 'credit_scrap'"/>
                         </group>
                     </group>
                     <group>
@@ -72,6 +86,9 @@
                 <field name="return_location_id"/>
                 <filter name="credit_return" string="Credit Return" domain="[('outcome', '=', 'credit_return')]"/>
                 <filter name="credit_scrap" string="Credit Scrap" domain="[('outcome', '=', 'credit_scrap')]"/>
+                <separator/>
+                <filter name="scrap_not_written_off" string="Scrap Not Written Off"
+                        domain="[('outcome', '=', 'credit_scrap'), ('scrap_id', '=', False)]"/>
                 <group>
                     <filter name="group_outcome" string="Outcome" domain="[]" context="{'group_by':'outcome'}"/>
                     <filter name="group_customer" string="Customer/Store" domain="[]" context="{'group_by':'partner_id'}"/>

@@ -3,6 +3,7 @@ import base64
 import logging
 from email.utils import formataddr
 
+import psycopg2
 from markupsafe import Markup
 
 from odoo import _, api, fields, models
@@ -316,6 +317,8 @@ class AccountMove(models.Model):
             for event in events:
                 if event.outcome == "credit_return":
                     event._reza_fsm_create_return_stock_move()
+                elif event.outcome == "credit_scrap":
+                    event._reza_fsm_try_create_scrap()
                 event.write({"state": "done"})
 
 
@@ -383,6 +386,16 @@ class CreditReturnEvent(models.Model):
                 "Credit Return location is required for %s."
             ) % self.product_id.display_name)
 
+        stock_move = self._reza_fsm_build_stock_move(
+            self.return_location_id,
+            _("Credit Return: %s") % self.product_id.display_name,
+        )
+        self.write({"stock_move_id": stock_move.id})
+        return stock_move
+
+    def _reza_fsm_build_stock_move(self, destination, description):
+        """Bring the goods back from the customer into `destination`, done."""
+        self.ensure_one()
         source_location = self._reza_fsm_get_customer_source_location()
         Move = self.env["stock.move"].sudo().with_company(self.company_id)
         move_vals = {
@@ -391,16 +404,13 @@ class CreditReturnEvent(models.Model):
             "product_uom_qty": self.quantity,
             "product_uom": self.product_uom_id.id,
             "location_id": source_location.id,
-            "location_dest_id": self.return_location_id.id,
+            "location_dest_id": destination.id,
             "origin": self.move_id.name or self.move_id.invoice_origin or self.move_id.ref,
         }
         if "description_picking" in Move._fields:
-            move_vals["description_picking"] = _("Credit Return: %s") % (
-                self.product_id.display_name
-            )
+            move_vals["description_picking"] = description
         stock_move = Move.create(move_vals)
         self._reza_fsm_finalize_return_stock_move(stock_move)
-        self.write({"stock_move_id": stock_move.id})
         return stock_move
 
     def _reza_fsm_finalize_return_stock_move(self, stock_move):
@@ -447,3 +457,175 @@ class CreditReturnEvent(models.Model):
         if not location:
             raise UserError(_("No customer stock location is configured."))
         return location
+
+    # ------------------------------------------------------------------
+    # Credit Scrap
+    # ------------------------------------------------------------------
+
+    def _reza_fsm_try_create_scrap(self):
+        """Write scrapped goods off in Inventory, without ever blocking the rep.
+
+        A Credit Scrap used to record a reason and nothing else.  The goods
+        left no trace in Inventory while the credit note still posted the
+        anglo-saxon COGS reversal, so the ledger said the stock came back when
+        no stock came back.  Two legs fix that: a receipt from the customer
+        location, then a Scrap Order out of it.  Quantity nets to zero and the
+        write-off is visible in Inventory and in Accounting.
+
+        The rep is standing at the counter when this runs, so a scrap that
+        cannot be built is recorded for the office and never raised - the
+        credit note is correct either way.  Both legs share one savepoint, so
+        a failure can never leave received-but-not-scrapped stock behind.
+        """
+        self.ensure_one()
+        if self.scrap_id:
+            return self.scrap_id
+        try:
+            # The savepoint must be INSIDE the try and the except OUTSIDE the
+            # with: catching within the block releases the savepoint instead
+            # of rolling it back, which would keep the half-done receipt.
+            with self.env.cr.savepoint():
+                scrap = self._reza_fsm_create_scrap()
+        except psycopg2.Error:
+            # Let this one through. Odoo retries the whole request on a
+            # serialization failure and nothing has committed yet, so
+            # swallowing it would hide a recoverable clash from the retry.
+            raise
+        except Exception as error:  # noqa: BLE001 - recorded, never raised
+            _logger.exception(
+                "Could not scrap %s for credit note %s",
+                self.product_id.display_name,
+                self.move_id.name or self.move_id.display_name,
+            )
+            self._reza_fsm_report_scrap_problem(str(error) or type(error).__name__)
+            return False
+        if self.reza_scrap_error:
+            self.write({"reza_scrap_error": False})
+        return scrap
+
+    def _reza_fsm_report_scrap_problem(self, reason):
+        """Record why the write-off did not happen, where the office will see it."""
+        self.ensure_one()
+        message = _(
+            "%(product)s was credited as scrap and Odoo could not write it off "
+            "in Inventory: %(reason)s"
+        ) % {
+            "product": self.product_id.display_name,
+            "reason": reason,
+        }
+        self.write({"reza_scrap_error": message[:500]})
+        self.move_id.sudo().message_post(body=message)
+        return message
+
+    def _reza_fsm_create_scrap(self):
+        """Receive the goods back, then scrap them. Raises on any problem."""
+        self.ensure_one()
+        product = self.product_id
+        if not product.is_storable:
+            raise UserError(_(
+                "%s is not a storable product, so there is no stock to write off."
+            ) % product.display_name)
+        landing = self._reza_fsm_get_scrap_landing_location()
+        receipt = self.stock_move_id
+        if not receipt:
+            receipt = self._reza_fsm_build_stock_move(
+                landing,
+                _("Credit Scrap: %s") % product.display_name,
+            )
+            self.write({"stock_move_id": receipt.id})
+        elif receipt.state != "done":
+            self._reza_fsm_finalize_return_stock_move(receipt)
+
+        Scrap = self.env["stock.scrap"].sudo().with_company(self.company_id)
+        scrap_vals = {
+            "product_id": product.id,
+            "product_uom_id": self.product_uom_id.id,
+            "scrap_qty": self.quantity,
+            "location_id": landing.id,
+            "company_id": self.company_id.id,
+            "origin": self.move_id.name or self.move_id.invoice_origin or self.move_id.ref,
+        }
+        # A reason is mandatory wherever reza_scrap_reason is installed, and
+        # do_scrap() refuses the write-off without one.
+        tag = self._reza_fsm_get_scrap_reason_tag()
+        if tag:
+            scrap_vals["scrap_reason_tag_ids"] = [(6, 0, tag.ids)]
+        scrap = Scrap.create(scrap_vals)
+        scrap.action_validate()
+        if scrap.state != "done":
+            # action_validate hands off to a wizard when the quantity is not
+            # available, which would leave the receipt standing on its own.
+            raise UserError(_(
+                "The Scrap Order for %(product)s stayed in %(state)s. There was "
+                "not enough stock at %(location)s to write off."
+            ) % {
+                "product": product.display_name,
+                "state": scrap.state,
+                "location": landing.display_name,
+            })
+        self.write({"scrap_id": scrap.id})
+        return scrap
+
+    def _reza_fsm_get_scrap_landing_location(self):
+        """Where the goods land on paper before they are written off.
+
+        The company's OWN warehouse stock, never `reza_icw_source_location_id`:
+        Liaise's source location belongs to Edbert, and scrapping Liaise's
+        goods out of Edbert's stock would write off the wrong company's
+        inventory.
+        """
+        self.ensure_one()
+        warehouse = self.env["stock.warehouse"].sudo().search(
+            [("company_id", "=", self.company_id.id)],
+            limit=1,
+            order="sequence, id",
+        )
+        location = warehouse.lot_stock_id
+        if not location:
+            raise UserError(_(
+                "%s has no warehouse stock location to receive the scrapped "
+                "goods into."
+            ) % self.company_id.display_name)
+        return location
+
+    def _reza_fsm_get_scrap_reason_tag(self):
+        """Turn the rep's scrap reason into a Scrap Order reason tag.
+
+        The two vocabularies are separate models, and the credit reasons ship
+        under noupdate="1" - a mapping written into that data file would never
+        reach a database that already holds the records.  So resolve it in
+        code, and let the optional tag on the reason override it by hand.
+        """
+        self.ensure_one()
+        Tag = self.env["stock.scrap.reason.tag"].sudo()
+        reason = self.scrap_reason_id
+        if reason.scrap_reason_tag_id:
+            return reason.scrap_reason_tag_id
+        if reason.name:
+            match = Tag.search([("name", "=ilike", reason.name)], limit=1)
+            if match:
+                return match
+        fallback = self.env.ref(
+            "reza_scrap_reason.scrap_reason_customer_return",
+            raise_if_not_found=False,
+        )
+        if fallback:
+            return fallback
+        return Tag.search([("name", "=ilike", "Customer Return - Unsaleable")], limit=1)
+
+    def action_reza_fsm_create_scrap(self):
+        """Build a missing Scrap Order by hand, from the office.
+
+        This one DOES raise. A rep mid-transaction must not be stopped, but an
+        office user who pressed the button is asking what went wrong.
+        """
+        for event in self:
+            if event.outcome != "credit_scrap":
+                raise UserError(_(
+                    "%s is not a Credit Scrap, so it has nothing to write off."
+                ) % event.display_name)
+            if event.scrap_id:
+                continue
+            event._reza_fsm_create_scrap()
+            event.write({"reza_scrap_error": False})
+        return True

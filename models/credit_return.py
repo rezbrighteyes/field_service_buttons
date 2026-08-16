@@ -20,6 +20,13 @@ class CreditReturnReason(models.Model):
         default="credit",
     )
     requires_note = fields.Boolean(string="Requires Note")
+    scrap_reason_tag_id = fields.Many2one(
+        "stock.scrap.reason.tag",
+        string="Scrap Reason Tag",
+        help="Reason written onto the Scrap Order this credit reason produces. "
+        "Leave it empty to let the scrap match a tag of the same name, and "
+        "fall back to the generic customer-return tag when there is none.",
+    )
 
 
 class CreditReturnEvent(models.Model):
@@ -94,6 +101,22 @@ class CreditReturnEvent(models.Model):
         string="Return Stock Move",
         readonly=True,
         copy=False,
+    )
+    scrap_id = fields.Many2one(
+        "stock.scrap",
+        string="Scrap Order",
+        readonly=True,
+        copy=False,
+        help="Scrap Order that wrote the goods off. A Credit Scrap first "
+        "receives the goods back from the customer, then scraps them, so "
+        "the write-off is visible in Inventory and in Accounting.",
+    )
+    reza_scrap_error = fields.Char(
+        string="Scrap Problem",
+        readonly=True,
+        copy=False,
+        help="Why this Credit Scrap has no Scrap Order yet. Blank means "
+        "there is no problem to report.",
     )
 
     @api.model_create_multi
