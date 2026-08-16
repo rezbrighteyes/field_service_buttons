@@ -30,10 +30,16 @@
         <field name="arch" type="xml">
             <form string="Credit Return">
                 <header>
+                    <!--
+                        Office only. The method writes stock and posts a
+                        journal entry under sudo(), and a rep holds write on
+                        this model for their own records.
+                    -->
                     <button name="action_reza_fsm_create_scrap"
                             type="object"
                             string="Create Scrap Order"
                             class="btn-primary"
+                            groups="reza_field_service_buttons.group_fsm_controllers"
                             invisible="outcome != 'credit_scrap' or scrap_id"/>
                 </header>
                 <sheet>

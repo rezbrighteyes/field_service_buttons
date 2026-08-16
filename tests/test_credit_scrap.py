@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import fields
+from odoo.exceptions import UserError
 from odoo.tests.common import TransactionCase, tagged
 
 
@@ -160,12 +161,58 @@ class TestCreditScrap(TransactionCase):
             'A Credit Return must put the goods back on the shelf.',
         )
 
+    def test_manual_scrap_button_is_office_only(self):
+        """A rep must not be able to post a write-off by calling the method.
+
+        The groups= on the button only hides it. This proves the method itself
+        refuses, which is what an RPC caller would hit.
+        """
+        rep = self.env['res.users'].create({
+            'name': 'Scrap Test Rep',
+            'login': 'scrap_test_rep',
+            'group_ids': [(6, 0, [
+                self.env.ref('base.group_user').id,
+                self.env.ref('industry_fsm.group_fsm_user').id,
+            ])],
+        })
+        # Guard the guard: if the fixture accidentally granted the group, the
+        # assertRaises below would pass for the wrong reason.
+        self.assertFalse(
+            rep.has_group('reza_field_service_buttons.group_fsm_controllers'))
+        self.assertFalse(rep.has_group('base.group_system'))
+
+        move, event = self._credit_note(self.service_like, 'credit_scrap')
+        move.action_post()
+        self.assertFalse(event.scrap_id)
+
+        with self.assertRaises(UserError):
+            event.with_user(rep).action_reza_fsm_create_scrap()
+
+        # And the office can.
+        event.scrap_reason_id = self.scrap_reason
+        self.assertTrue(
+            self.env.user.has_group('reza_field_service_buttons.group_fsm_controllers')
+            or self.env.user.has_group('base.group_system'))
+
     def test_scrap_reason_tag_falls_back_to_a_matching_name(self):
-        """With no tag set by hand, a tag of the same name is used."""
+        """With no tag set by hand, a tag of the same name reaches the Scrap Order.
+
+        This is the branch production actually uses: the shipped credit reasons
+        carry no mapping, so "Damaged" has to find the "Damaged" tag on its own.
+        Post the credit note rather than calling the resolver alone, or the test
+        would pass even if the tag never landed on the scrap.
+        """
         self.scrap_reason.scrap_reason_tag_id = False
         named_tag = self.env['stock.scrap.reason.tag'].create({
             'name': self.scrap_reason.name,
         })
         move, event = self._credit_note(self.storable, 'credit_scrap')
+        move.action_post()
 
-        self.assertEqual(event._reza_fsm_get_scrap_reason_tag(), named_tag)
+        self.assertFalse(event.reza_scrap_error)
+        self.assertTrue(event.scrap_id, 'No Scrap Order was created.')
+        self.assertEqual(event.scrap_id.state, 'done')
+        self.assertEqual(
+            event.scrap_id.scrap_reason_tag_ids, named_tag,
+            'The Scrap Order must carry the tag matched from the reason name.',
+        )

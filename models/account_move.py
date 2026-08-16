@@ -598,11 +598,18 @@ class CreditReturnEvent(models.Model):
         """
         self.ensure_one()
         Tag = self.env["stock.scrap.reason.tag"].sudo()
+        # A tag flagged as a staff purchase can never be validated from here:
+        # reza_scrap_reason refuses do_scrap() until a person is named, and
+        # nobody took these goods. Picking one would disable the write-off for
+        # that reason silently.
+        domain = []
+        if "reza_requires_staff_member" in Tag._fields:
+            domain = [("reza_requires_staff_member", "=", False)]
         reason = self.scrap_reason_id
         if reason.scrap_reason_tag_id:
             return reason.scrap_reason_tag_id
         if reason.name:
-            match = Tag.search([("name", "=ilike", reason.name)], limit=1)
+            match = Tag.search(domain + [("name", "=ilike", reason.name)], limit=1)
             if match:
                 return match
         fallback = self.env.ref(
@@ -611,14 +618,29 @@ class CreditReturnEvent(models.Model):
         )
         if fallback:
             return fallback
-        return Tag.search([("name", "=ilike", "Customer Return - Unsaleable")], limit=1)
+        return Tag.search(
+            domain + [("name", "=ilike", "Customer Return - Unsaleable")], limit=1)
 
     def action_reza_fsm_create_scrap(self):
         """Build a missing Scrap Order by hand, from the office.
 
         This one DOES raise. A rep mid-transaction must not be stopped, but an
         office user who pressed the button is asking what went wrong.
+
+        The `groups=` on the button hides it; it does not stop an RPC caller,
+        and a rep holds write on their own events while this method writes
+        stock and posts a journal entry under sudo(). So the entitlement is
+        checked here as well. `sudo()` does not satisfy `has_group`, which is
+        what makes this guard real rather than decorative.
         """
+        if not (
+            self.env.user.has_group("reza_field_service_buttons.group_fsm_controllers")
+            or self.env.user.has_group("base.group_system")
+        ):
+            raise UserError(_(
+                "Only the office can create a Scrap Order from a Credit Scrap. "
+                "It writes stock off and posts a journal entry."
+            ))
         for event in self:
             if event.outcome != "credit_scrap":
                 raise UserError(_(
@@ -626,6 +648,11 @@ class CreditReturnEvent(models.Model):
                 ) % event.display_name)
             if event.scrap_id:
                 continue
-            event._reza_fsm_create_scrap()
+            # Roll the receipt back if the scrap half fails, then re-raise so
+            # the office sees the reason. Without this a shell or RPC caller
+            # would be left holding a receipt with no write-off against it -
+            # the browser is only safe because the request rolls itself back.
+            with self.env.cr.savepoint():
+                event._reza_fsm_create_scrap()
             event.write({"reza_scrap_error": False})
         return True
