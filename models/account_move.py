@@ -550,6 +550,12 @@ class CreditReturnEvent(models.Model):
         tag = self._reza_fsm_get_scrap_reason_tag()
         if tag:
             scrap_vals["scrap_reason_tag_ids"] = [(6, 0, tag.ids)]
+        # Core stock.scrap has no customer field. reza_scrap_reason adds one,
+        # and without it the Scrap Orders list cannot say whose goods these
+        # were. Guarded on the field existing so this module keeps working
+        # where that one is not installed.
+        if "reza_partner_id" in Scrap._fields and self.partner_id:
+            scrap_vals["reza_partner_id"] = self.partner_id.id
         scrap = Scrap.create(scrap_vals)
         scrap.action_validate()
         if scrap.state != "done":

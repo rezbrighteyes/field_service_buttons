@@ -104,6 +104,12 @@ class TestCreditScrap(TransactionCase):
         self.assertEqual(event.scrap_id.scrap_qty, 2.0)
         self.assertEqual(event.scrap_id.location_id, self.landing)
         self.assertEqual(event.scrap_id.scrap_reason_tag_ids, self.scrap_tag)
+        self.assertEqual(event.scrap_id.origin, move.name)
+        if 'reza_partner_id' in event.scrap_id._fields:
+            self.assertEqual(
+                event.scrap_id.reza_partner_id, self.partner,
+                'The Scrap Order must say whose goods were written off.',
+            )
         self.assertTrue(event.stock_move_id, 'No receipt move was created.')
         self.assertEqual(event.stock_move_id.state, 'done')
         self.assertEqual(event.stock_move_id.location_dest_id, self.landing)
