@@ -58,4 +58,17 @@
             </field>
         </field>
     </record>
+
+    <!-- Show up to 200 sub-tasks per page instead of Odoo's default 40.
+         The biggest rep run currently carries 77 stops. -->
+    <record id="view_task_form_subtask_limit" model="ir.ui.view">
+        <field name="name">project.task.form.subtask.limit</field>
+        <field name="model">project.task</field>
+        <field name="inherit_id" ref="project.view_task_form2"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='sub_tasks_page']//field[@name='child_ids']/list" position="attributes">
+                <attribute name="limit">200</attribute>
+            </xpath>
+        </field>
+    </record>
 </odoo>
