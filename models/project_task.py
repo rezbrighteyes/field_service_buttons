@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 import logging
+from datetime import datetime
+
+import pytz
 
 from odoo import models, fields, api, _, SUPERUSER_ID
 from odoo.exceptions import UserError, ValidationError
@@ -372,19 +375,82 @@ class ProjectTask(models.Model):
         return int(interval or 6), (unit or 'week')
 
     def _fsm_get_next_visit_base_date(self):
+        """Return the date the next visit is counted from: the run's START.
+
+        A run spans several days, but a given customer is called on once, on a
+        day near the start of it.  Counting the interval from the end meant that
+        every time a trip ran long the whole cadence slipped out with it, so the
+        reps were correcting the field by hand - and every hand correction set
+        fsm_next_visit_date_manual, freezing that task for good.
+
+        date_deadline stays as the fallback for a task with no start date.
+
+        date_end is deliberately NOT in this list.  On project.task it is the
+        task CLOSE timestamp, not the end of the visit, so a run closed weeks
+        late dated its own next visit from the paperwork.  planned_date_end does
+        not exist on project.task in Odoo 19 and is dropped with it.
+        """
         self.ensure_one()
         return self._fsm_get_datetime_value((
-            'planned_date_end',
-            'date_end',
-            'date_deadline',
             'planned_date_begin',
+            'date_deadline',
         ))
+
+    def _fsm_next_visit_timezone(self):
+        """The timezone the visit calendar is read in.
+
+        The schedule fields are naive UTC datetimes.  A run that starts at
+        09:00 Brisbane is stored as 23:00 UTC the PREVIOUS day, so taking the
+        date straight off the UTC value dated the next visit one day early on
+        every morning start.  That is the difference the reps were correcting
+        by hand on DUBBO and KINGAROY.
+
+        The ASSIGNEE comes first - and on a task with several assignees that
+        means `user_ids[:1]`, the first by res.users._order (name, login), NOT
+        the rep who happens to drive to the town.  Measured on production
+        2026-09-15: multi-assignee runs are common and the reps span four
+        timezones (Brisbane, Sydney, Melbourne, Perth), so the audit reports
+        every task whose assignees disagree.  The visit happens on the rep's calendar
+        day, in the town the rep drives to - the DUBBO run is in New South
+        Wales, which keeps daylight saving, while the companies are in
+        Queensland, which does not.  Reading a NSW run on the Queensland
+        calendar can move a late start by a day, which is the very fault this
+        method exists to remove.
+
+        The company is second, so an UNASSIGNED task still computes one date
+        whoever saves it.  `env.user.tz` is only a third resort, because under
+        sudo() that user is OdooBot and a maintenance script would otherwise
+        decide the calendar.  On 2026-09-15 none of the three company partners
+        carries a tz, so set those or an unassigned task falls through to
+        OdooBot and lands on UTC.
+        """
+        self.ensure_one()
+        assignee = self.user_ids[:1] if 'user_ids' in self._fields else False
+        return (
+            (assignee.tz if assignee else False)
+            or (self.company_id.partner_id.tz if self.company_id else False)
+            or self.env.user.tz
+            or 'UTC'
+        )
+
+    def _fsm_next_visit_local_date(self, value):
+        self.ensure_one()
+        if not value:
+            return False
+        if not isinstance(value, datetime):
+            return fields.Date.to_date(value)
+        try:
+            tz = pytz.timezone(self._fsm_next_visit_timezone())
+        except pytz.UnknownTimeZoneError:
+            tz = pytz.utc
+        return pytz.utc.localize(value).astimezone(tz).date()
 
     def _fsm_calculate_next_visit_date(self):
         self.ensure_one()
         base_date = self._fsm_get_next_visit_base_date()
         if not base_date:
             return False
+        base_date = self._fsm_next_visit_local_date(base_date)
 
         interval, unit = self._fsm_get_repeat_interval_unit()
         unit = (unit or 'week').lower()
@@ -396,7 +462,7 @@ class ProjectTask(models.Model):
             delta = relativedelta(years=interval)
         else:
             delta = relativedelta(weeks=interval)
-        return fields.Date.to_date(base_date + delta)
+        return base_date + delta
 
     def _fsm_sync_next_visit_date(self):
         for task in self:

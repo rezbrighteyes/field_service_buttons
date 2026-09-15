@@ -116,13 +116,94 @@ class TestProjectTaskStatusGuard(TransactionCase):
         self.child.invalidate_recordset(['fsm_partner_credit_control'])
         self.assertFalse(self.child.fsm_partner_credit_control)
 
-    def test_next_visit_date_defaults_from_deadline_plus_six_weeks(self):
-        task = self.Task.create({
-            'name': 'Next Visit Task',
-            'project_id': self.project.id,
-            'date_deadline': '2026-05-29',
-        })
+    def _fsm_next_visit_task(self, name, **vals):
+        # The schedule fields are naive UTC.  Pin the reading timezone so the
+        # expected dates below do not depend on the test runner's locale.
+        self.env.user.tz = 'Australia/Brisbane'
+        return self.Task.create(dict(
+            vals,
+            name=name,
+            project_id=self.project.id,
+        ))
+
+    def test_next_visit_date_falls_back_to_deadline_without_a_start_date(self):
+        task = self._fsm_next_visit_task(
+            'Next Visit Task',
+            date_deadline='2026-05-29 04:00:00',
+        )
         self.assertEqual(task.fsm_next_visit_date, date(2026, 7, 10))
+
+    def test_next_visit_date_counts_from_the_start_not_the_deadline(self):
+        # A run spans several days.  The customer is called on near the start,
+        # so the interval runs from planned_date_begin.  Counting from the
+        # deadline here would give 2026-07-17.
+        task = self._fsm_next_visit_task(
+            'Multi Day Run',
+            planned_date_begin='2026-05-29 04:00:00',
+            date_deadline='2026-06-05 05:00:00',
+        )
+        self.assertEqual(task.fsm_next_visit_date, date(2026, 7, 10))
+
+    def test_next_visit_date_ignores_the_task_close_timestamp(self):
+        # date_end is when the task was CLOSED, not when the visit ended.  A run
+        # closed late must not push its own next visit out.
+        task = self._fsm_next_visit_task(
+            'Closed Late Run',
+            planned_date_begin='2026-05-29 04:00:00',
+            date_end='2026-07-01 04:00:00',
+        )
+        self.assertEqual(task.fsm_next_visit_date, date(2026, 7, 10))
+
+    def test_next_visit_date_uses_the_local_calendar_day(self):
+        # 09:00 Brisbane on 31 Aug is stored as 30 Aug 23:00 UTC.  Reading the
+        # date straight off the UTC value would give 2026-10-11, a day early.
+        task = self._fsm_next_visit_task(
+            'Morning Start Run',
+            planned_date_begin='2026-08-30 23:00:00',
+        )
+        self.assertEqual(task.fsm_next_visit_date, date(2026, 10, 12))
+
+    def test_next_visit_date_prefers_the_assignee_timezone(self):
+        # The visit happens on the rep's calendar day, in the town the rep
+        # drives to.  13:00 UTC on 29 May is 01:00 on 30 May in Auckland, so
+        # the local day is the 30th and the answer is 11 Jul.  Reading it on
+        # the company's Perth calendar would give 29 May and 10 Jul.
+        self.project.company_id.partner_id.tz = 'Australia/Perth'
+        rep = self.env['res.users'].create({
+            'name': 'FSM Timezone Rep',
+            'login': 'fsm_timezone_rep_test',
+            'email': 'fsm_timezone_rep_test@example.com',
+            'tz': 'Pacific/Auckland',
+            'group_ids': [(6, 0, [self.env.ref('project.group_project_user').id])],
+        })
+        task = self._fsm_next_visit_task(
+            'Assigned Run',
+            planned_date_begin='2026-05-29 13:00:00',
+            user_ids=[(6, 0, [rep.id])],
+        )
+        self.assertEqual(task.fsm_next_visit_date, date(2026, 7, 11))
+
+    def test_next_visit_date_falls_back_to_the_company_timezone(self):
+        # With no assignee the company decides, NOT whoever happens to be
+        # saving.  15:00 UTC on 29 May is 23:00 the same day in Perth, so the
+        # answer is 10 Jul.  env.user is Brisbane, which would give 11 Jul.
+        self.project.company_id.partner_id.tz = 'Australia/Perth'
+        task = self._fsm_next_visit_task(
+            'Unassigned Run',
+            planned_date_begin='2026-05-29 15:00:00',
+            user_ids=[(6, 0, [])],
+        )
+        self.assertFalse(task.user_ids)
+        self.assertEqual(task.fsm_next_visit_date, date(2026, 7, 10))
+
+    def test_next_visit_date_follows_a_moved_start_date(self):
+        task = self._fsm_next_visit_task(
+            'Rescheduled Run',
+            planned_date_begin='2026-05-29 04:00:00',
+            date_deadline='2026-06-05 05:00:00',
+        )
+        task.write({'planned_date_begin': '2026-06-05 04:00:00'})
+        self.assertEqual(task.fsm_next_visit_date, date(2026, 7, 17))
 
     def test_next_visit_date_manual_override_is_preserved(self):
         task = self.Task.create({
