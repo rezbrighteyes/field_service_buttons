@@ -5,5 +5,6 @@ from . import res_partner
 from . import sale_order
 from . import credit_return
 from . import credit_return_wizard
+from . import credit_return_log
 from . import account_move
 from . import rep_operation_report

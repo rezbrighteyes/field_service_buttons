@@ -22,6 +22,21 @@ class AccountMove(models.Model):
         readonly=True,
         index=True,
     )
+    # The rep's credit that fills this credit note in.  Set while the note is
+    # a draft; kept after posting as the audit link back to the credit.
+    reza_fsm_credit_return_id = fields.Many2one(
+        "reza.fsm.credit.return.wizard",
+        string="Field Service Credit",
+        copy=False,
+        readonly=True,
+        index="btree_not_null",
+        ondelete="set null",
+    )
+    reza_fsm_credit_unfinished = fields.Boolean(
+        string="Unfinished Field Service Credit",
+        compute="_compute_reza_fsm_credit_unfinished",
+        compute_sudo=True,
+    )
     reza_fsm_credit_return_event_ids = fields.One2many(
         "reza.fsm.credit.return.event",
         "move_id",
@@ -66,6 +81,15 @@ class AccountMove(models.Model):
     )
     is_signed = fields.Boolean(string="Is Signed", compute="_compute_is_signed")
 
+    @api.depends("reza_fsm_credit_return_id.state", "state")
+    def _compute_reza_fsm_credit_unfinished(self):
+        for move in self:
+            move.reza_fsm_credit_unfinished = bool(
+                move.state == "draft"
+                and move.reza_fsm_credit_return_id
+                and move.reza_fsm_credit_return_id.state != "done"
+            )
+
     @api.depends("signature", "reza_fsm_customer_signature")
     def _compute_is_signed(self):
         for move in self:
@@ -98,6 +122,80 @@ class AccountMove(models.Model):
         result = super().action_post()
         self._reza_fsm_process_credit_return_events()
         return result
+
+    def unlink(self):
+        # Keep what an unfinished rep credit's draft said before the office
+        # deletes it: reza.fsm.credit.return.log outlives the move.
+        Log = self.env["reza.fsm.credit.return.log"]
+        for move in self.sudo().filtered(
+            lambda m: m.reza_fsm_credit_return_id and m.state == "draft"
+        ):
+            product_lines = move.invoice_line_ids.filtered(
+                lambda line: line.reza_fsm_credit_return_outcome
+            )
+            Log._reza_fsm_log(
+                "draft_deleted",
+                move.reza_fsm_credit_return_id,
+                [Log._reza_fsm_move_line_values(line) for line in product_lines],
+                move_ref_id=move.id,
+            )
+        return super().unlink()
+
+    def _post(self, soft=True):
+        # A draft that belongs to an unfinished rep credit has no signature
+        # and no return events yet, so posting it from Accounting credits the
+        # customer without the goods ever coming back into stock.  The rep's
+        # Create & Confirm (which sets the context key) posts it normally.
+        # Members of "Post unfinished rep credits" (and the superuser) may
+        # post it anyway; that is logged and noted on the credit note.
+        override = self.browse()
+        if not self.env.context.get("reza_fsm_credit_return_confirm"):
+            unfinished = self.filtered("reza_fsm_credit_unfinished")
+            if unfinished:
+                if not (
+                    self.env.is_superuser()
+                    or self.env.user.has_group(
+                        "reza_field_service_buttons.group_post_unfinished_rep_credit"
+                    )
+                ):
+                    raise UserError(_(
+                        "%s belongs to an unfinished field service credit. The "
+                        "rep confirms it from the visit with Create & Confirm "
+                        "Credit Note. Only members of the group \"Post unfinished "
+                        "rep credits\" may post it from Accounting. To drop it "
+                        "instead, delete the draft."
+                    ) % ", ".join(unfinished.mapped("display_name")))
+                override = unfinished
+        result = super()._post(soft=soft)
+        for move in override.filtered(lambda m: m.state == "posted"):
+            move._reza_fsm_record_office_post()
+        return result
+
+    def _reza_fsm_record_office_post(self):
+        """Log and note a post made without the rep's confirmation."""
+        self.ensure_one()
+        credit = self.sudo().reza_fsm_credit_return_id
+        Log = self.env["reza.fsm.credit.return.log"]
+        product_lines = self.sudo().invoice_line_ids.filtered(
+            lambda line: line.reza_fsm_credit_return_outcome
+        )
+        Log._reza_fsm_log(
+            "office_posted_unfinished",
+            credit,
+            [Log._reza_fsm_move_line_values(line) for line in product_lines],
+            move_ref_id=self.id,
+            move_name=self.name,
+        )
+        self.sudo().message_post(
+            body=_(
+                "Posted by %(user)s without rep confirmation. The field service "
+                "credit was unfinished: no customer signature was taken through "
+                "the credit, and no return events exist, so this post does NOT "
+                "bring the stock back."
+            ) % {"user": self.env.user.name},
+            subtype_xmlid="mail.mt_note",
+            author_id=self.env.user.partner_id.id,
+        )
 
     def _reza_fsm_is_signable_credit_note(self):
         self.ensure_one()

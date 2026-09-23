@@ -11,32 +11,101 @@ from odoo.tools import float_compare
 
 _logger = logging.getLogger(__name__)
 
+# Context key: suppress the per-line draft credit note sync while a batch of
+# line changes is written, so the sync runs once at the end instead.
+SKIP_DRAFT_SYNC = "reza_fsm_skip_draft_credit_sync"
 
-class CreditReturnWizard(models.TransientModel):
+# Line fields that change what the draft credit note says.
+DRAFT_SYNC_LINE_FIELDS = {
+    "product_id",
+    "quantity",
+    "product_uom_id",
+    "price_unit",
+    "outcome",
+    "return_location_id",
+    "credit_reason_ids",
+    "scrap_reason_id",
+    "note",
+}
+
+
+class CreditReturnWizard(models.Model):
+    """A rep's credit / return for one customer visit.
+
+    This was a TransientModel until 19.0.1.12.0. A rep who left the screen
+    lost the whole credit when the vacuum cleared the transient rows - eight
+    credits went that way on production. It is now a stored record the rep
+    can reopen from the visit, and it keeps a DRAFT out_refund in step with
+    its lines, so the office can see an unfinished credit in Accounting.
+    The model keeps its old name so the views and the modules that extend it
+    (reza_rep_return_docket) keep working.
+    """
+
     _name = "reza.fsm.credit.return.wizard"
     _inherit = "product.catalog.mixin"
     _description = "Field Service Credit / Return"
+    _order = "id desc"
 
-    task_id = fields.Many2one("project.task", required=True, readonly=True)
+    # cascade matches the foreign key the transient model already had, so
+    # converting the model does not change the table.
+    task_id = fields.Many2one(
+        "project.task", required=True, readonly=True, index=True, ondelete="cascade",
+    )
     partner_id = fields.Many2one(
         "res.partner",
         string="Customer",
         related="task_id.partner_id",
         readonly=True,
     )
+    # Stored so the multi-company record rule can filter on it.
     company_id = fields.Many2one(
         "res.company",
         string="Company",
         related="task_id.company_id",
         readonly=True,
+        store=True,
+        index=True,
+    )
+    user_id = fields.Many2one(
+        "res.users",
+        string="Rep",
+        default=lambda self: self.env.user,
+        readonly=True,
+        index=True,
     )
     state = fields.Selection(
         [("draft", "Draft"), ("done", "Confirmed")],
         default="draft",
         readonly=True,
+        index=True,
     )
     credit_note_id = fields.Integer(copy=False, readonly=True)
     credit_note_name = fields.Char(string="Credit Note", copy=False, readonly=True)
+    # The out_refund this credit fills in.  It is a draft until the rep
+    # confirms, and the same record is posted then.  Deleting it in
+    # Accounting clears the link, and the next line change makes a new one.
+    move_id = fields.Many2one(
+        "account.move",
+        string="Draft Credit Note",
+        copy=False,
+        readonly=True,
+        ondelete="set null",
+        index=True,
+    )
+    # Plain copy of the last draft credit note id.  It survives the office
+    # deleting the draft, so the log can say the draft was recreated.
+    last_move_ref_id = fields.Integer(copy=False, readonly=True)
+    log_ids = fields.One2many(
+        "reza.fsm.credit.return.log",
+        "credit_return_id",
+        string="Log",
+        readonly=True,
+    )
+    has_draft_credit_note = fields.Boolean(
+        compute="_compute_has_draft_credit_note",
+        compute_sudo=True,
+    )
+    line_count = fields.Integer(compute="_compute_line_count", string="Products")
     allowed_return_location_ids = fields.Many2many(
         "stock.location",
         compute="_compute_allowed_return_location_ids",
@@ -84,8 +153,38 @@ class CreditReturnWizard(models.TransientModel):
         for wizard in self:
             wizard.is_signed = bool(wizard.signature)
 
+    @api.depends("move_id", "move_id.state")
+    def _compute_has_draft_credit_note(self):
+        for wizard in self:
+            wizard.has_draft_credit_note = bool(
+                wizard.move_id and wizard.move_id.state == "draft"
+            )
+
+    @api.depends("line_ids")
+    def _compute_line_count(self):
+        for wizard in self:
+            wizard.line_count = len(wizard.line_ids)
+
+    @api.depends("task_id", "credit_note_name", "create_date")
+    def _compute_display_name(self):
+        for wizard in self:
+            if wizard.credit_note_name:
+                wizard.display_name = wizard.credit_note_name
+            else:
+                wizard.display_name = _("Credit - %(task)s (unfinished)") % {
+                    "task": wizard.task_id.display_name or "",
+                }
+
     def write(self, vals):
-        result = super().write(vals)
+        if "line_ids" in vals and not self.env.context.get(SKIP_DRAFT_SYNC):
+            # A form save sends every line change at once.  Sync the draft
+            # credit note once afterwards rather than once per line.
+            result = super(
+                CreditReturnWizard, self.with_context(**{SKIP_DRAFT_SYNC: True})
+            ).write(vals)
+            self._reza_fsm_sync_draft_credit_note()
+        else:
+            result = super().write(vals)
         if vals.get("signature"):
             for wizard in self.filtered("signature"):
                 update_vals = {}
@@ -95,7 +194,20 @@ class CreditReturnWizard(models.TransientModel):
                     update_vals["signed_on"] = fields.Datetime.now()
                 if update_vals:
                     super(CreditReturnWizard, wizard).write(update_vals)
+                self.env["reza.fsm.credit.return.log"]._reza_fsm_log(
+                    "sign", wizard, note=wizard.signed_by,
+                )
         return result
+
+    def unlink(self):
+        Log = self.env["reza.fsm.credit.return.log"]
+        for wizard in self:
+            Log._reza_fsm_log(
+                "credit_deleted",
+                wizard,
+                [Log._reza_fsm_line_values(line) for line in wizard.line_ids],
+            )
+        return super().unlink()
 
     def action_open_signature(self):
         """Open signing only after the editable return lines have been saved."""
@@ -191,23 +303,22 @@ class CreditReturnWizard(models.TransientModel):
         lines._validate_credit_return_lines()
 
         actor_id = self.env.user.id
-        Move = self.env["account.move"].sudo().with_company(self.company_id)
-        MoveLine = self.env["account.move.line"].sudo().with_company(self.company_id)
+        # Post the draft this credit has kept in step with its lines, rather
+        # than raising a second credit note.  The sync below also makes the
+        # draft when the office deleted it while the rep had the credit open.
+        self._reza_fsm_sync_draft_credit_note()
+        move = self._reza_fsm_get_draft_credit_note()
+        if not move:
+            raise ValidationError(_("The draft credit note could not be created."))
         Event = self.env["reza.fsm.credit.return.event"].sudo().with_company(self.company_id)
-        move = Move.create({
-            "move_type": "out_refund",
-            "partner_id": self.partner_id.id,
-            "partner_shipping_id": self.partner_id.id,
-            "company_id": self.company_id.id,
-            "invoice_date": fields.Date.context_today(self),
-            "invoice_origin": self.task_id.name,
-            "reza_fsm_task_id": self.task_id.id,
-        })
         # Save the customer signature separately once the credit note exists.
         # Account moves can add defaults during create, so writing this directly
-        # to the new record guarantees the Tax Credit Note report receives it.
-        # The signed PDF is attached once after posting below.
+        # to the record guarantees the Tax Credit Note report receives it.
+        # The signed PDF is attached once after posting below.  The date is
+        # the day the rep confirms, not the day the draft was started.
         move.with_context(reza_fsm_skip_signed_credit_note_attachment=True).write({
+            "invoice_date": fields.Date.context_today(self),
+            "invoice_origin": self.task_id.name,
             "reza_fsm_customer_signature": self.signature,
             "reza_fsm_customer_signed_by": self.signed_by or self.partner_id.name,
             "reza_fsm_customer_signed_on": self.signed_on or fields.Datetime.now(),
@@ -215,21 +326,12 @@ class CreditReturnWizard(models.TransientModel):
 
         for wizard_line in lines:
             product_uom = wizard_line.product_uom_id or wizard_line.product_id.uom_id
-            move_line = MoveLine.create({
-                "move_id": move.id,
-                "product_id": wizard_line.product_id.id,
-                "quantity": wizard_line.quantity,
-                "product_uom_id": product_uom.id,
-                "price_unit": wizard_line.price_unit,
-                "name": wizard_line.product_id.display_name,
-                "reza_fsm_credit_return_outcome": wizard_line.outcome,
-                "reza_fsm_credit_return_location_id": wizard_line.return_location_id.id,
-                "reza_fsm_credit_reason_ids": [
-                    (6, 0, wizard_line.credit_reason_ids.ids)
-                ],
-                "reza_fsm_scrap_reason_id": wizard_line.scrap_reason_id.id,
-                "reza_fsm_credit_note": wizard_line.note,
-            })
+            move_line = wizard_line.sudo().move_line_id
+            if not move_line or move_line.move_id != move:
+                raise ValidationError(_(
+                    "The draft credit note is missing the line for %s. "
+                    "Close the credit and open it again."
+                ) % wizard_line.product_id.display_name)
             event = Event.create({
                 "date": fields.Date.context_today(self),
                 "outcome": wizard_line.outcome,
@@ -249,13 +351,17 @@ class CreditReturnWizard(models.TransientModel):
             })
             move_line.write({"reza_fsm_credit_return_event_id": event.id})
 
-        move.action_post()
+        move.with_context(reza_fsm_credit_return_confirm=True).action_post()
         move._reza_fsm_attach_signed_credit_note()
         self.write({
             "state": "done",
             "credit_note_id": move.id,
             "credit_note_name": move.name,
         })
+        Log = self.env["reza.fsm.credit.return.log"]
+        Log._reza_fsm_log(
+            "confirm", self, [Log._reza_fsm_line_values(line) for line in lines],
+        )
         self._reza_fsm_schedule_credit_note_email(move)
 
         return {
@@ -266,6 +372,142 @@ class CreditReturnWizard(models.TransientModel):
             "view_mode": "form",
             "target": "current",
         }
+
+    # ------------------------------------------------------------------
+    # Draft credit note kept in step with the lines
+    # ------------------------------------------------------------------
+    def _reza_fsm_get_draft_credit_note(self, create=False):
+        """Return the draft out_refund of this credit, sudo'd to its company.
+
+        Reps have read-only access to account.move, so every accounting
+        write here runs as sudo, pinned to the credit's company - the same
+        pattern the confirm step has always used.  The rep's access to the
+        visit is checked by the callers.
+
+        Raises when the office has already posted or cancelled the draft:
+        the rep must not change a credit note that Accounting has taken over.
+        """
+        self.ensure_one()
+        move = self.sudo().move_id.with_company(self.company_id)
+        if move:
+            if move.state == "posted":
+                raise ValidationError(_(
+                    "The office has already posted credit note %s for this "
+                    "credit. Ask the office to make any change."
+                ) % (move.name or ""))
+            if move.state == "cancel":
+                raise ValidationError(_(
+                    "The office has cancelled the draft credit note for this "
+                    "credit. Ask the office before you continue."
+                ))
+            return move
+        if not create:
+            return move
+        if not self.partner_id:
+            raise ValidationError(_("This task has no customer set."))
+        move = self.env["account.move"].sudo().with_company(self.company_id).create({
+            "move_type": "out_refund",
+            "partner_id": self.partner_id.id,
+            "partner_shipping_id": self.partner_id.id,
+            "company_id": self.company_id.id,
+            "invoice_origin": self.task_id.name,
+            "reza_fsm_task_id": self.task_id.id,
+            "reza_fsm_credit_return_id": self.id,
+        })
+        previous_move_ref = self.last_move_ref_id
+        self.sudo().with_context(**{SKIP_DRAFT_SYNC: True}).write({
+            "move_id": move.id,
+            "last_move_ref_id": move.id,
+        })
+        if previous_move_ref:
+            self.env["reza.fsm.credit.return.log"]._reza_fsm_log(
+                "draft_recreated",
+                self,
+                note=_("The draft credit note %s was gone; a new one was made.")
+                % previous_move_ref,
+            )
+        return move
+
+    def _reza_fsm_credit_move_line_values(self, wizard_line):
+        product_uom = wizard_line.product_uom_id or wizard_line.product_id.uom_id
+        return {
+            "product_id": wizard_line.product_id.id,
+            "quantity": wizard_line.quantity,
+            "product_uom_id": product_uom.id,
+            "price_unit": wizard_line.price_unit,
+            "name": wizard_line.product_id.display_name,
+            "reza_fsm_credit_return_outcome": wizard_line.outcome,
+            "reza_fsm_credit_return_location_id": wizard_line.return_location_id.id,
+            "reza_fsm_credit_reason_ids": [(6, 0, wizard_line.credit_reason_ids.ids)],
+            "reza_fsm_scrap_reason_id": wizard_line.scrap_reason_id.id,
+            "reza_fsm_credit_note": wizard_line.note,
+        }
+
+    @api.model
+    def _reza_fsm_move_line_differs(self, move_line, values):
+        """True when writing `values` would change `move_line`.
+
+        Only a real change is written, so opening and saving the credit does
+        not keep rewriting the draft (and its taxes) for nothing.
+        """
+        for field_name, value in values.items():
+            field = move_line._fields[field_name]
+            current = move_line[field_name]
+            if field.type == "many2many":
+                if set(current.ids) != set(value[0][2]):
+                    return True
+            elif field.type == "many2one":
+                if current.id != (value or False):
+                    return True
+            elif field.type == "float":
+                if float_compare(current or 0.0, value or 0.0, precision_digits=6):
+                    return True
+            elif (current or False) != (value or False):
+                return True
+        return False
+
+    def _reza_fsm_sync_draft_credit_note(self):
+        """Make the draft credit note match the credit lines.
+
+        The first product creates the draft, so the office can see the
+        unfinished credit in Accounting from then on.  Each line keeps a link
+        to its credit note line: a changed line updates it, a new line adds
+        one, and a line the rep deleted takes its credit note line with it.
+        Lines the office added by hand (no credit outcome) are left alone.
+        A draft that loses every line is kept, empty, and reused.
+        """
+        for wizard in self.exists():
+            if wizard.state == "done":
+                continue
+            lines = wizard.line_ids.filtered("product_id")
+            move = wizard._reza_fsm_get_draft_credit_note(create=bool(lines))
+            if not move:
+                continue
+            if move.partner_id != wizard.partner_id and wizard.partner_id:
+                move.write({
+                    "partner_id": wizard.partner_id.id,
+                    "partner_shipping_id": wizard.partner_id.id,
+                })
+            MoveLine = self.env["account.move.line"].sudo().with_company(wizard.company_id)
+            kept = MoveLine
+            for wizard_line in lines:
+                values = wizard._reza_fsm_credit_move_line_values(wizard_line)
+                move_line = wizard_line.sudo().move_line_id
+                if move_line and move_line.move_id == move:
+                    if wizard._reza_fsm_move_line_differs(move_line, values):
+                        move_line.write(values)
+                else:
+                    move_line = MoveLine.create({**values, "move_id": move.id})
+                    wizard_line.sudo().with_context(**{SKIP_DRAFT_SYNC: True}).write({
+                        "move_line_id": move_line.id,
+                    })
+                kept |= move_line
+            stale = move.invoice_line_ids.filtered(
+                lambda line: line.reza_fsm_credit_return_outcome and line not in kept
+            )
+            if stale:
+                stale.unlink()
+        return True
 
     def _reza_fsm_schedule_credit_note_email(self, move):
         """Email the customer once this transaction has safely committed.
@@ -458,7 +700,14 @@ class CreditReturnWizard(models.TransientModel):
         }
 
     def action_cancel_credit_return(self):
+        """Leave the credit and go back to the visit.
+
+        Nothing is deleted: the credit and its draft credit note stay, and the
+        rep reopens them from the visit with the Credit / Return button.
+        """
         self.ensure_one()
+        if self.state != "done":
+            self.env["reza.fsm.credit.return.log"]._reza_fsm_log("save_back", self)
         return {
             "type": "ir.actions.act_window",
             "name": _("Field Service Task"),
@@ -481,6 +730,10 @@ class CreditReturnWizard(models.TransientModel):
             "reza_fsm_credit_return_catalog": True,
         }
         return action
+
+    def _is_readonly(self):
+        self.ensure_one()
+        return self.state == "done"
 
     def _get_product_catalog_domain(self):
         domain = super()._get_product_catalog_domain()
@@ -720,7 +973,7 @@ class CreditReturnSendWizard(models.TransientModel):
         }
 
 
-class CreditReturnWizardLine(models.TransientModel):
+class CreditReturnWizardLine(models.Model):
     _name = "reza.fsm.credit.return.wizard.line"
     _description = "Field Service Credit / Return Line"
 
@@ -728,6 +981,22 @@ class CreditReturnWizardLine(models.TransientModel):
         "reza.fsm.credit.return.wizard",
         required=True,
         ondelete="cascade",
+        index=True,
+    )
+    company_id = fields.Many2one(
+        related="wizard_id.company_id",
+        store=True,
+        index=True,
+    )
+    # The matching line on the draft credit note.  Cleared when the office
+    # deletes that line or the whole draft; the next sync then recreates it.
+    move_line_id = fields.Many2one(
+        "account.move.line",
+        string="Credit Note Line",
+        copy=False,
+        readonly=True,
+        ondelete="set null",
+        index="btree_not_null",
     )
     allowed_return_location_ids = fields.Many2many(
         "stock.location",
@@ -773,6 +1042,65 @@ class CreditReturnWizardLine(models.TransientModel):
         domain=[("reason_type", "in", ("scrap", "both"))],
     )
     note = fields.Text()
+
+    # Every add, change and remove is written to reza.fsm.credit.return.log
+    # after the draft sync, so the row carries the draft credit note id.  The
+    # log is written even when the sync is deferred (form save): the product
+    # values are what matter, and they are known here.
+    @api.model_create_multi
+    def create(self, vals_list):
+        lines = super().create(vals_list)
+        if not self.env.context.get(SKIP_DRAFT_SYNC):
+            lines.wizard_id._reza_fsm_sync_draft_credit_note()
+        Log = self.env["reza.fsm.credit.return.log"]
+        for line in lines:
+            Log._reza_fsm_log("add", line.wizard_id, [Log._reza_fsm_line_values(line)])
+        return lines
+
+    def write(self, vals):
+        tracked = DRAFT_SYNC_LINE_FIELDS.intersection(vals)
+        Log = self.env["reza.fsm.credit.return.log"]
+        before = {line.id: Log._reza_fsm_line_values(line) for line in self} if tracked else {}
+        result = super().write(vals)
+        if tracked and not self.env.context.get(SKIP_DRAFT_SYNC):
+            self.wizard_id._reza_fsm_sync_draft_credit_note()
+        for line in self if tracked else ():
+            old = before[line.id]
+            new = Log._reza_fsm_line_values(line)
+            changed = [
+                key for key in (
+                    "product_name", "quantity", "uom_name", "price_unit", "outcome",
+                    "return_location_name", "reasons", "note",
+                )
+                if (old[key] or False) != (new[key] or False)
+            ]
+            if not changed:
+                continue
+            Log._reza_fsm_log(
+                "change",
+                line.wizard_id,
+                [new],
+                old_quantity=old["quantity"],
+                old_price_unit=old["price_unit"],
+                changes=", ".join(
+                    "%s: %s -> %s" % (key, old[key] or "", new[key] or "")
+                    for key in changed
+                ),
+            )
+        return result
+
+    def unlink(self):
+        Log = self.env["reza.fsm.credit.return.log"]
+        removed = [(line.wizard_id, Log._reza_fsm_line_values(line)) for line in self]
+        wizards = self.wizard_id
+        result = super().unlink()
+        if not self.env.context.get(SKIP_DRAFT_SYNC):
+            # The sync deletes the credit note lines these lines left behind.
+            wizards.exists()._reza_fsm_sync_draft_credit_note()
+        for wizard, line_values in removed:
+            if wizard.exists():
+                Log._reza_fsm_log("remove", wizard, [line_values])
+        return result
 
     def _get_product_catalog_lines_data(self, parent_record=None, **kwargs):
         line = self[:1]

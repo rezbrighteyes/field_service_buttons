@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Read-only trail of every product put on, changed on or taken off a
+         rep credit. The rows outlive the credit and its draft credit note,
+         so the office can always see what an abandoned credit held. -->
+    <record id="view_reza_fsm_credit_return_log_list" model="ir.ui.view">
+        <field name="name">reza.fsm.credit.return.log.list</field>
+        <field name="model">reza.fsm.credit.return.log</field>
+        <field name="arch" type="xml">
+            <list string="Credit / Return Log" create="0" edit="0" delete="0"
+                  decoration-danger="action in ('remove', 'draft_deleted', 'credit_deleted', 'office_posted_unfinished')"
+                  decoration-success="action == 'confirm'">
+                <field name="date"/>
+                <field name="action"/>
+                <field name="user_name"/>
+                <field name="task_name"/>
+                <field name="partner_name"/>
+                <field name="credit_ref_id" optional="hide"/>
+                <field name="move_ref_id" optional="hide"/>
+                <field name="move_name" optional="show"/>
+                <field name="product_code" optional="show"/>
+                <field name="product_name"/>
+                <field name="quantity"/>
+                <field name="uom_name" optional="hide"/>
+                <field name="price_unit"/>
+                <field name="outcome" optional="show"/>
+                <field name="return_location_name" optional="show"/>
+                <field name="reasons" optional="show"/>
+                <field name="changes" optional="show"/>
+                <field name="note" optional="hide"/>
+                <field name="company_id" groups="base.group_multi_company" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_reza_fsm_credit_return_log_form" model="ir.ui.view">
+        <field name="name">reza.fsm.credit.return.log.form</field>
+        <field name="model">reza.fsm.credit.return.log</field>
+        <field name="arch" type="xml">
+            <form string="Credit / Return Log" create="0" edit="0" delete="0">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="date"/>
+                            <field name="action"/>
+                            <field name="user_id"/>
+                            <field name="user_name"/>
+                            <field name="company_id"/>
+                            <field name="task_id"/>
+                            <field name="task_ref_id"/>
+                            <field name="task_name"/>
+                            <field name="partner_id"/>
+                            <field name="partner_name"/>
+                        </group>
+                        <group>
+                            <field name="credit_return_id"/>
+                            <field name="credit_ref_id"/>
+                            <field name="credit_line_ref_id"/>
+                            <field name="move_ref_id"/>
+                            <field name="move_name"/>
+                            <field name="product_id"/>
+                            <field name="product_code"/>
+                            <field name="product_name"/>
+                            <field name="quantity"/>
+                            <field name="old_quantity"/>
+                            <field name="uom_name"/>
+                            <field name="price_unit"/>
+                            <field name="old_price_unit"/>
+                            <field name="outcome"/>
+                            <field name="return_location_name"/>
+                            <field name="reasons"/>
+                            <field name="changes"/>
+                        </group>
+                    </group>
+                    <field name="note"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_reza_fsm_credit_return_log_search" model="ir.ui.view">
+        <field name="name">reza.fsm.credit.return.log.search</field>
+        <field name="model">reza.fsm.credit.return.log</field>
+        <field name="arch" type="xml">
+            <search string="Credit / Return Log">
+                <field name="partner_name"/>
+                <field name="task_name"/>
+                <field name="user_name"/>
+                <field name="product_name"/>
+                <field name="credit_ref_id"/>
+                <field name="move_ref_id"/>
+                <filter name="filter_products" string="Product Changes"
+                        domain="[('action', 'in', ('add', 'change', 'remove'))]"/>
+                <filter name="filter_deleted" string="Deletions"
+                        domain="[('action', 'in', ('remove', 'draft_deleted', 'credit_deleted'))]"/>
+                <filter name="filter_confirmed" string="Confirmed"
+                        domain="[('action', '=', 'confirm')]"/>
+                <separator/>
+                <filter name="filter_date" string="Date" date="date"/>
+                <separator/>
+                <filter name="group_credit" string="Credit" context="{'group_by': 'credit_ref_id'}"/>
+                <filter name="group_user" string="User" context="{'group_by': 'user_id'}"/>
+                <filter name="group_action" string="Action" context="{'group_by': 'action'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_reza_fsm_credit_return_log" model="ir.actions.act_window">
+        <field name="name">Credit / Return Log</field>
+        <field name="res_model">reza.fsm.credit.return.log</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_reza_fsm_credit_return_log_search"/>
+    </record>
+
+    <menuitem
+        id="menu_reza_fsm_credit_return_log"
+        name="Credit / Return Log"
+        parent="industry_fsm.fsm_menu_reporting"
+        action="action_reza_fsm_credit_return_log"
+        groups="reza_field_service_buttons.group_fsm_controllers"
+        sequence="26"/>
+
+    <menuitem
+        id="menu_reza_fsm_credit_return_log_accounting"
+        name="Field Service Credit Log"
+        parent="account.menu_finance_receivables"
+        action="action_reza_fsm_credit_return_log"
+        groups="account.group_account_invoice"
+        sequence="90"/>
+</odoo>

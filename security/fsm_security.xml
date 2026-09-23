@@ -5,6 +5,14 @@
         <field name="implied_ids" eval="[(4, ref('project.group_project_user'))]"/>
     </record>
 
+    <!-- May post a rep's unfinished draft credit note from Accounting.
+         Deliberately assigned to nobody here: add users in Settings > Users.
+         Posting that way credits the customer but does not return the stock. -->
+    <record id="group_post_unfinished_rep_credit" model="res.groups">
+        <field name="name">Post unfinished rep credits</field>
+        <field name="comment">Can post a field rep's unfinished draft credit note from Accounting. The post does not bring the stock back (no return events).</field>
+    </record>
+
     <record id="group_liaise_field_rep" model="res.groups">
         <field name="name">Liaise Field Rep</field>
         <field name="implied_ids" eval="[
@@ -71,5 +79,106 @@
         <field name="perm_write" eval="True"/>
         <field name="perm_create" eval="True"/>
         <field name="perm_unlink" eval="True"/>
+    </record>
+
+    <!-- Credits / returns are stored records since 19.0.1.12.0 (they were
+         transient). A rep sees the credits they started and the credits on
+         visits assigned to them; controllers see every credit. -->
+    <record id="rule_credit_return_wizard_rep_own" model="ir.rule">
+        <field name="name">Credit / Return: Field Service Own</field>
+        <field name="model_id" ref="model_reza_fsm_credit_return_wizard"/>
+        <field name="groups" eval="[(4, ref('industry_fsm.group_fsm_user'))]"/>
+        <field name="domain_force">['|', ('user_id', '=', user.id), ('task_id.user_ids', 'in', [user.id])]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+
+    <record id="rule_credit_return_wizard_controller_all" model="ir.rule">
+        <field name="name">Credit / Return: Controllers All</field>
+        <field name="model_id" ref="model_reza_fsm_credit_return_wizard"/>
+        <field name="groups" eval="[(4, ref('reza_field_service_buttons.group_fsm_controllers'))]"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+
+    <record id="rule_credit_return_wizard_company" model="ir.rule">
+        <field name="name">Credit / Return: multi-company</field>
+        <field name="model_id" ref="model_reza_fsm_credit_return_wizard"/>
+        <field name="domain_force">['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
+    </record>
+
+    <record id="rule_credit_return_wizard_line_rep_own" model="ir.rule">
+        <field name="name">Credit / Return Line: Field Service Own</field>
+        <field name="model_id" ref="model_reza_fsm_credit_return_wizard_line"/>
+        <field name="groups" eval="[(4, ref('industry_fsm.group_fsm_user'))]"/>
+        <field name="domain_force">['|', ('wizard_id.user_id', '=', user.id), ('wizard_id.task_id.user_ids', 'in', [user.id])]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+
+    <record id="rule_credit_return_wizard_line_controller_all" model="ir.rule">
+        <field name="name">Credit / Return Line: Controllers All</field>
+        <field name="model_id" ref="model_reza_fsm_credit_return_wizard_line"/>
+        <field name="groups" eval="[(4, ref('reza_field_service_buttons.group_fsm_controllers'))]"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+
+    <record id="rule_credit_return_wizard_line_company" model="ir.rule">
+        <field name="name">Credit / Return Line: multi-company</field>
+        <field name="model_id" ref="model_reza_fsm_credit_return_wizard_line"/>
+        <field name="domain_force">['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
+    </record>
+
+    <!-- Credit / return log: append-only (the model refuses write and
+         unlink outside sudo). A rep reads only the rows they wrote; FSM
+         Controllers and Accounting (Billing) read every row. -->
+    <record id="rule_credit_return_log_rep_own" model="ir.rule">
+        <field name="name">Credit / Return Log: Field Service Own</field>
+        <field name="model_id" ref="model_reza_fsm_credit_return_log"/>
+        <field name="groups" eval="[(4, ref('industry_fsm.group_fsm_user'))]"/>
+        <field name="domain_force">[('user_id', '=', user.id)]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="True"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+
+    <record id="rule_credit_return_log_controller_all" model="ir.rule">
+        <field name="name">Credit / Return Log: Controllers All</field>
+        <field name="model_id" ref="model_reza_fsm_credit_return_log"/>
+        <field name="groups" eval="[(4, ref('reza_field_service_buttons.group_fsm_controllers'))]"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+
+    <record id="rule_credit_return_log_account_all" model="ir.rule">
+        <field name="name">Credit / Return Log: Accounting All</field>
+        <field name="model_id" ref="model_reza_fsm_credit_return_log"/>
+        <field name="groups" eval="[(4, ref('account.group_account_invoice'))]"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+
+    <record id="rule_credit_return_log_company" model="ir.rule">
+        <field name="name">Credit / Return Log: multi-company</field>
+        <field name="model_id" ref="model_reza_fsm_credit_return_log"/>
+        <field name="domain_force">['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
     </record>
 </odoo>

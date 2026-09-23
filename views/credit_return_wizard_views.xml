@@ -34,11 +34,14 @@
                         class="btn-secondary"
                         invisible="state != 'done'"
                     />
+                    <!-- Leaves the credit without deleting anything. The rep
+                         reopens it from the visit's Credit / Return button. -->
                     <button
                         name="action_cancel_credit_return"
-                        string="Cancel"
+                        string="Save &amp; Back to Task"
                         type="object"
                         class="btn-secondary"
+                        invisible="state == 'done'"
                     />
                 </header>
                 <sheet>
@@ -47,10 +50,18 @@
                         The office sends it from Accounting once the pricing has
                         been checked.
                     </div>
+                    <div class="alert alert-warning" role="alert" invisible="state == 'done' or not has_draft_credit_note">
+                        This credit is saved as a <b>draft</b> credit note. It is
+                        not finished. You can leave this screen and open it again
+                        from the visit. Press <b>Create &amp; Confirm Credit Note</b>
+                        to finish it.
+                    </div>
                     <group>
                         <field name="task_id"/>
                         <field name="partner_id"/>
                         <field name="company_id"/>
+                        <field name="user_id" readonly="1"/>
+                        <field name="has_draft_credit_note" invisible="1"/>
                         <field name="state" invisible="1"/>
                         <field name="credit_note_id" invisible="1"/>
                         <field name="credit_note_name" readonly="1" invisible="not credit_note_name"/>
@@ -111,6 +122,37 @@
                     </field>
                 </sheet>
             </form>
+        </field>
+    </record>
+
+    <record id="view_reza_fsm_credit_return_wizard_list" model="ir.ui.view">
+        <field name="name">reza.fsm.credit.return.wizard.list</field>
+        <field name="model">reza.fsm.credit.return.wizard</field>
+        <field name="arch" type="xml">
+            <list string="Credits / Returns" decoration-info="state == 'draft'">
+                <field name="create_date" string="Started"/>
+                <field name="task_id"/>
+                <field name="partner_id"/>
+                <field name="user_id"/>
+                <field name="line_count"/>
+                <field name="credit_note_name"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="state" widget="badge" decoration-info="state == 'draft'" decoration-success="state == 'done'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_reza_fsm_credit_return_wizard_search" model="ir.ui.view">
+        <field name="name">reza.fsm.credit.return.wizard.search</field>
+        <field name="model">reza.fsm.credit.return.wizard</field>
+        <field name="arch" type="xml">
+            <search string="Credits / Returns">
+                <field name="task_id"/>
+                <field name="partner_id"/>
+                <field name="user_id"/>
+                <filter name="filter_unfinished" string="Unfinished" domain="[('state', '=', 'draft')]"/>
+                <filter name="filter_confirmed" string="Confirmed" domain="[('state', '=', 'done')]"/>
+            </search>
         </field>
     </record>
 

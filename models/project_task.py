@@ -107,6 +107,19 @@ class ProjectTask(models.Model):
         related='partner_id.commercial_partner_id.credit_control',
         readonly=True,
     )
+    reza_fsm_credit_return_ids = fields.One2many(
+        'reza.fsm.credit.return.wizard',
+        'task_id',
+        string='Credits / Returns',
+    )
+    reza_fsm_open_credit_count = fields.Integer(
+        string='Unfinished Credits',
+        compute='_compute_reza_fsm_open_credit_count',
+    )
+    reza_fsm_credit_log_count = fields.Integer(
+        string='Credit Log',
+        compute='_compute_reza_fsm_credit_log_count',
+    )
 
     @api.model
     def _reza_cleanup_fsm_date_search_defaults(self):
@@ -537,11 +550,25 @@ class ProjectTask(models.Model):
         }
 
     def action_create_credit_note(self):
+        """Open the visit's unfinished credit, or start one.
+
+        A credit is a stored record now, so a rep who left the screen gets
+        the same credit back - lines, signature and draft credit note - rather
+        than an empty one.  With several unfinished credits on the visit the
+        rep picks from the list, which also has New for a further credit.
+        """
         self.ensure_one()
         partner = self.partner_id
         if not partner:
             raise UserError(_('This task has no customer set. Please set a customer first.'))
-        wizard = self.env['reza.fsm.credit.return.wizard'].create({
+        Credit = self.env['reza.fsm.credit.return.wizard']
+        open_credits = Credit.search([
+            ('task_id', '=', self.id),
+            ('state', '=', 'draft'),
+        ])
+        if len(open_credits) > 1:
+            return self.action_open_fsm_credit_returns()
+        wizard = open_credits or Credit.create({
             'task_id': self.id,
         })
         return {
@@ -550,6 +577,76 @@ class ProjectTask(models.Model):
             'res_model': 'reza.fsm.credit.return.wizard',
             'res_id': wizard.id,
             'view_mode': 'form',
+            'target': 'current',
+        }
+
+    @api.depends('reza_fsm_credit_return_ids.state')
+    def _compute_reza_fsm_open_credit_count(self):
+        counts = {}
+        Credit = self.env['reza.fsm.credit.return.wizard']
+        # This task form extension also serves ordinary project users, who
+        # have no access to credits at all - show them nothing, not an error.
+        if self.ids and Credit.has_access('read'):
+            groups = Credit._read_group(
+                [('task_id', 'in', self.ids), ('state', '=', 'draft')],
+                ['task_id'],
+                ['__count'],
+            )
+            counts = {task.id: count for task, count in groups}
+        for task in self:
+            task.reza_fsm_open_credit_count = counts.get(task.id, 0)
+
+    def _compute_reza_fsm_credit_log_count(self):
+        counts = {}
+        Log = self.env['reza.fsm.credit.return.log']
+        if self.ids and Log.has_access('read'):
+            groups = Log._read_group(
+                [('task_ref_id', 'in', self.ids)],
+                ['task_ref_id'],
+                ['__count'],
+            )
+            counts = dict(groups)
+        for task in self:
+            task.reza_fsm_credit_log_count = counts.get(task.id, 0)
+
+    def action_open_fsm_credit_log(self):
+        """Every product ever put on a credit for this visit.
+
+        Filtered on the plain task id, so rows whose credit or draft credit
+        note has since been deleted still show.
+        """
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Credit / Return Log'),
+            'res_model': 'reza.fsm.credit.return.log',
+            'view_mode': 'list,form',
+            'domain': [('task_ref_id', '=', self.id)],
+            'context': {'create': False},
+            'target': 'current',
+        }
+
+    def action_open_fsm_credit_returns(self):
+        """List this visit's credits, unfinished ones first."""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Credits / Returns'),
+            'res_model': 'reza.fsm.credit.return.wizard',
+            'view_mode': 'list,form',
+            'views': [
+                (self.env.ref(
+                    'reza_field_service_buttons.view_reza_fsm_credit_return_wizard_list'
+                ).id, 'list'),
+                (self.env.ref(
+                    'reza_field_service_buttons.view_reza_fsm_credit_return_wizard_form'
+                ).id, 'form'),
+            ],
+            'domain': [('task_id', '=', self.id)],
+            'context': {
+                'default_task_id': self.id,
+                'search_default_filter_unfinished': 1,
+            },
             'target': 'current',
         }
 

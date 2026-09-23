@@ -24,6 +24,26 @@
                     icon="fa-file-text-o"
                 />
             </button>
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button
+                    name="action_open_fsm_credit_returns"
+                    type="object"
+                    class="oe_stat_button"
+                    icon="fa-undo"
+                    invisible="not reza_fsm_open_credit_count"
+                >
+                    <field name="reza_fsm_open_credit_count" widget="statinfo" string="Unfinished Credits"/>
+                </button>
+                <button
+                    name="action_open_fsm_credit_log"
+                    type="object"
+                    class="oe_stat_button"
+                    icon="fa-history"
+                    invisible="not reza_fsm_credit_log_count"
+                >
+                    <field name="reza_fsm_credit_log_count" widget="statinfo" string="Credit Log"/>
+                </button>
+            </xpath>
             <xpath expr="//sheet/*[1]" position="before">
                 <field name="fsm_partner_credit_control" invisible="1"/>
                 <div
