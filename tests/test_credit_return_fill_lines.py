@@ -148,17 +148,12 @@ class TestCreditReturnFillLines(TransactionCase):
             self.wizard.action_fill_return_lines()
 
     def test_fill_refuses_a_location_the_rep_is_not_allowed(self):
-        # An intercompany warehouse manager is allowed every internal location,
-        # so the guard cannot fire for one - and the account running the tests
-        # normally is one.  Stand the runner down to a plain rep for this test
-        # or it passes without ever reaching the check it exists to prove.
-        manager_group = self.env.ref(
-            'reza_intercompany_warehouse.group_intercompany_warehouse_manager'
-        )
-        if self.env.user.has_group(
-            'reza_intercompany_warehouse.group_intercompany_warehouse_manager'
-        ):
-            self.env.user.write({'group_ids': [(3, manager_group.id)]})
+        # An FSM Controller is allowed every internal location, so the guard
+        # cannot fire for one.  Stand the runner down to a plain rep for this
+        # test or it passes without ever reaching the check it exists to prove.
+        controllers = self.env.ref('reza_field_service_buttons.group_fsm_controllers')
+        if self.env.user.has_group('reza_field_service_buttons.group_fsm_controllers'):
+            self.env.user.write({'group_ids': [(3, controllers.id)]})
             self.env.registry.clear_cache()
             self.wizard.invalidate_recordset(['allowed_return_location_ids'])
 
@@ -178,6 +173,58 @@ class TestCreditReturnFillLines(TransactionCase):
         )
         with self.assertRaises(ValidationError):
             self.wizard.action_fill_return_lines()
+
+    def _plain_user(self, login, locations=(), groups=()):
+        return self.env['res.users'].with_context(no_reset_password=True).create({
+            'name': login,
+            'login': login,
+            'company_id': self.company.id,
+            'company_ids': [(6, 0, [self.company.id])],
+            'group_ids': [(6, 0, [self.env.ref('base.group_user').id]
+                          + [self.env.ref(g).id for g in groups])],
+            'reza_icw_allowed_rep_location_ids': [(6, 0, [l.id for l in locations])],
+        })
+
+    def test_locations_come_from_the_rep_not_the_viewer(self):
+        # Several reps are also intercompany warehouse managers.  That group
+        # used to open every internal location on the credit - other reps'
+        # vans and the warehouse stock - so it must no longer widen the list.
+        rep = self._plain_user(
+            'credit_loc_rep', [self.location],
+            ['reza_intercompany_warehouse.group_intercompany_warehouse_manager'],
+        )
+        office = self._plain_user('credit_loc_office', [self.other_location])
+        self.wizard.user_id = rep
+        self.wizard.invalidate_recordset(['allowed_return_location_ids'])
+        as_rep = self.wizard.with_user(rep)._get_allowed_return_locations()
+        as_office = self.wizard.with_user(office)._get_allowed_return_locations()
+        self.assertEqual(as_rep, self.location)
+        self.assertEqual(
+            as_office, self.location,
+            "Office staff opening a rep's credit must see the rep's van, not their own.",
+        )
+
+    def test_fsm_controller_sees_every_internal_location(self):
+        rep = self._plain_user('credit_loc_rep2', [self.location])
+        controller = self._plain_user(
+            'credit_loc_controller', (),
+            ['reza_field_service_buttons.group_fsm_controllers'],
+        )
+        self.wizard.user_id = rep
+        allowed = self.wizard.with_user(controller)._get_allowed_return_locations()
+        self.assertIn(self.location, allowed)
+        self.assertIn(self.other_location, allowed)
+
+    def test_rep_who_is_a_controller_sees_only_own_van_on_own_credit(self):
+        # Dustin, Glen B, Michael W and Harry S are FSM Controllers as well
+        # as reps.  On their own credit they must still get only their van.
+        rep = self._plain_user(
+            'credit_loc_rep_ctrl', [self.location],
+            ['reza_field_service_buttons.group_fsm_controllers'],
+        )
+        self.wizard.user_id = rep
+        allowed = self.wizard.with_user(rep)._get_allowed_return_locations()
+        self.assertEqual(allowed, self.location)
 
     def test_fill_refuses_once_the_credit_note_is_confirmed(self):
         self._line(self.product_a)

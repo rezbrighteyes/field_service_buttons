@@ -33,9 +33,9 @@ class CreditReturnWizard(models.Model):
     """A rep's credit / return for one customer visit.
 
     This was a TransientModel until 19.0.1.12.0. A rep who left the screen
-    lost the whole credit when the vacuum cleared the transient rows - eight
-    credits went that way on production. It is now a stored record the rep
-    can reopen from the visit, and it keeps a DRAFT out_refund in step with
+    lost the whole credit when the vacuum cleared the transient rows - at
+    least 31 signed credits went that way on production (Aug-Sep 2026). It
+    is now a stored record the rep can reopen from the visit, and it keeps a DRAFT out_refund in step with
     its lines, so the office can see an unfinished credit in Accounting.
     The model keeps its old name so the views and the modules that extend it
     (reza_rep_return_docket) keep working.
@@ -270,7 +270,7 @@ class CreditReturnWizard(models.Model):
         lines.write(values)
         return False
 
-    @api.depends("task_id", "company_id")
+    @api.depends("task_id", "company_id", "user_id")
     def _compute_allowed_return_location_ids(self):
         for wizard in self:
             wizard.allowed_return_location_ids = wizard._get_allowed_return_locations()
@@ -847,11 +847,24 @@ class CreditReturnWizard(models.Model):
         return price
 
     def _get_allowed_return_locations(self):
+        """The van / shed list comes from the credit's REP, not the viewer.
+
+        Several reps are also intercompany warehouse managers, which used to
+        open every internal location (other reps' vans, LWH/Stock, WH/Stock)
+        to them here. Office staff opening a rep's stored credit must see the
+        rep's locations too. An FSM Controller gets the full list, but only on
+        SOMEONE ELSE's credit - several reps are controllers as well, and on
+        their own credit they still get just their own van / shed.
+        """
         self.ensure_one()
         Location = self.env["stock.location"]
-        company = self.company_id or self.env.company
-        if self.env.user.has_group(
-            "reza_intercompany_warehouse.group_intercompany_warehouse_manager"
+        # sudo: only the credit's own rep and company are read, and a viewer
+        # who is not the rep may not pass the credit's record rule.
+        credit = self.sudo()
+        company = credit.company_id or self.env.company
+        rep = credit.user_id or self.env.user
+        if rep != self.env.user and self.env.user.has_group(
+            "reza_field_service_buttons.group_fsm_controllers"
         ):
             return Location.search([
                 ("usage", "=", "internal"),
@@ -860,7 +873,7 @@ class CreditReturnWizard(models.Model):
                 ("company_id", "=", company.id),
             ])
 
-        assigned_locations = self.env.user.reza_icw_allowed_rep_location_ids.filtered(
+        assigned_locations = rep.sudo().reza_icw_allowed_rep_location_ids.filtered(
             lambda location: (
                 location.usage == "internal"
                 and (not location.company_id or location.company_id == company)
