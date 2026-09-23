@@ -31,6 +31,7 @@ class CreditReturnLog(models.Model):
             ("sign", "Customer Signed"),
             ("confirm", "Confirmed"),
             ("save_back", "Saved & Left"),
+            ("cancel", "Credit Cancelled"),
             ("draft_deleted", "Draft Credit Note Deleted"),
             ("draft_recreated", "Draft Credit Note Recreated"),
             ("credit_deleted", "Credit Deleted"),

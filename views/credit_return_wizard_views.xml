@@ -11,28 +11,28 @@
                         string="Create &amp; Confirm Credit Note"
                         type="object"
                         class="btn-secondary"
-                        invisible="state == 'done'"
+                        invisible="state != 'draft'"
                     />
                     <button
                         name="action_add_from_catalog"
                         string="Add Products"
                         type="object"
                         class="btn-secondary"
-                        invisible="state == 'done'"
+                        invisible="state != 'draft'"
                     />
                     <button
                         name="action_open_signature"
                         string="Sign Credit Return"
                         type="object"
                         class="btn-secondary"
-                        invisible="is_signed or state == 'done'"
+                        invisible="is_signed or state != 'draft'"
                     />
                     <button
                         name="action_open_customer_task"
                         string="Back to Task"
                         type="object"
                         class="btn-secondary"
-                        invisible="state != 'done'"
+                        invisible="state == 'draft'"
                     />
                     <!-- Leaves the credit without deleting anything. The rep
                          reopens it from the visit's Credit / Return button. -->
@@ -41,7 +41,17 @@
                         string="Save &amp; Back to Task"
                         type="object"
                         class="btn-secondary"
-                        invisible="state == 'done'"
+                        invisible="state != 'draft'"
+                    />
+                    <!-- Drops the credit: deletes its draft credit note and
+                         marks it Cancelled. The products stay in the log. -->
+                    <button
+                        name="action_discard_credit_return"
+                        string="Cancel Credit"
+                        type="object"
+                        class="btn-secondary text-danger"
+                        invisible="state != 'draft'"
+                        confirm="Cancel this credit? Its draft credit note is deleted. The customer gets no credit."
                     />
                 </header>
                 <sheet>
@@ -50,7 +60,10 @@
                         The office sends it from Accounting once the pricing has
                         been checked.
                     </div>
-                    <div class="alert alert-warning" role="alert" invisible="state == 'done' or not has_draft_credit_note">
+                    <div class="alert alert-secondary" role="status" invisible="state != 'cancel'">
+                        This credit was <b>cancelled</b>. No credit note was made.
+                    </div>
+                    <div class="alert alert-warning" role="alert" invisible="state != 'draft' or not has_draft_credit_note">
                         This credit is saved as a <b>draft</b> credit note. It is
                         not finished. You can leave this screen and open it again
                         from the visit. Press <b>Create &amp; Confirm Credit Note</b>
@@ -71,13 +84,13 @@
                         <field name="signature" widget="image" readonly="1" invisible="not signature"/>
                         <field name="allowed_return_location_ids" invisible="1"/>
                     </group>
-                    <div class="alert alert-light" role="status" invisible="state == 'done'">
+                    <div class="alert alert-light" role="status" invisible="state != 'draft'">
                         Pick a return location and reason below, then press
                         <b>Fill Return Lines</b> to put them on every Credit Return
                         line at once. Credit Scrap lines are left alone.
                     </div>
-                    <group string="Fill Return Lines" invisible="state == 'done'">
-                        <field name="bulk_return_location_id"/>
+                    <group string="Fill Return Lines" invisible="state != 'draft'">
+                        <field name="bulk_return_location_id" options="{'no_create': True, 'no_open': True}"/>
                         <field name="bulk_credit_reason_ids" widget="many2many_tags"/>
                         <field name="bulk_note" placeholder="Optional note"/>
                         <button
@@ -88,7 +101,7 @@
                             colspan="2"
                         />
                     </group>
-                    <field name="line_ids" nolabel="1" readonly="state == 'done'">
+                    <field name="line_ids" nolabel="1" readonly="state != 'draft'">
                         <list editable="bottom" create="0">
                             <field name="allowed_return_location_ids" column_invisible="True"/>
                             <field name="product_id" readonly="1"/>
@@ -98,6 +111,7 @@
                             <field name="outcome"/>
                             <field
                                 name="return_location_id"
+                                options="{'no_create': True, 'no_open': True}"
                                 required="outcome == 'credit_return'"
                                 invisible="outcome != 'credit_return'"
                             />
@@ -137,7 +151,7 @@
                 <field name="line_count"/>
                 <field name="credit_note_name"/>
                 <field name="company_id" groups="base.group_multi_company"/>
-                <field name="state" widget="badge" decoration-info="state == 'draft'" decoration-success="state == 'done'"/>
+                <field name="state" widget="badge" decoration-info="state == 'draft'" decoration-success="state == 'done'" decoration-muted="state == 'cancel'"/>
             </list>
         </field>
     </record>
@@ -152,6 +166,7 @@
                 <field name="user_id"/>
                 <filter name="filter_unfinished" string="Unfinished" domain="[('state', '=', 'draft')]"/>
                 <filter name="filter_confirmed" string="Confirmed" domain="[('state', '=', 'done')]"/>
+                <filter name="filter_cancelled" string="Cancelled" domain="[('state', '=', 'cancel')]"/>
             </search>
         </field>
     </record>

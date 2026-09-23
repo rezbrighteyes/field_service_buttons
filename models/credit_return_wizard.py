@@ -74,7 +74,7 @@ class CreditReturnWizard(models.Model):
         index=True,
     )
     state = fields.Selection(
-        [("draft", "Draft"), ("done", "Confirmed")],
+        [("draft", "Draft"), ("done", "Confirmed"), ("cancel", "Cancelled")],
         default="draft",
         readonly=True,
         index=True,
@@ -237,9 +237,9 @@ class CreditReturnWizard(models.Model):
         reason comes from a different list.
         """
         self.ensure_one()
-        if self.state == "done":
+        if self.state != "draft":
             raise ValidationError(_(
-                "This credit return has already been confirmed."
+                "This credit return is already confirmed or cancelled."
             ))
         location = self.bulk_return_location_id
         reasons = self.bulk_credit_reason_ids
@@ -289,6 +289,8 @@ class CreditReturnWizard(models.Model):
         # may perform.  Keep their normal account.move access unchanged.
         self.task_id.check_access_rights("read")
         self.task_id.check_access_rule("read")
+        if self.state == "cancel":
+            raise ValidationError(_("This credit return was cancelled."))
         if self.state == "done" or self.credit_note_id:
             raise ValidationError(_(
                 "This credit return has already been confirmed as %s."
@@ -477,7 +479,7 @@ class CreditReturnWizard(models.Model):
         A draft that loses every line is kept, empty, and reused.
         """
         for wizard in self.exists():
-            if wizard.state == "done":
+            if wizard.state != "draft":
                 continue
             lines = wizard.line_ids.filtered("product_id")
             move = wizard._reza_fsm_get_draft_credit_note(create=bool(lines))
@@ -717,6 +719,26 @@ class CreditReturnWizard(models.Model):
             "target": "current",
         }
 
+    def action_discard_credit_return(self):
+        """Cancel an unfinished credit the rep does not want.
+
+        The draft credit note is deleted.  The credit itself is kept as
+        Cancelled, not deleted, and every product on it goes to the log, so
+        the office can still see what was started and dropped.
+        """
+        self.ensure_one()
+        if self.state != "draft":
+            raise ValidationError(_("Only an unfinished credit can be cancelled."))
+        Log = self.env["reza.fsm.credit.return.log"]
+        Log._reza_fsm_log(
+            "cancel", self, [Log._reza_fsm_line_values(line) for line in self.line_ids],
+        )
+        move = self.sudo().move_id
+        self.write({"state": "cancel"})
+        if move and move.state == "draft":
+            move.with_company(self.company_id).unlink()
+        return self.action_open_customer_task()
+
     def action_add_from_catalog(self):
         self.ensure_one()
         action = super().action_add_from_catalog()
@@ -733,7 +755,7 @@ class CreditReturnWizard(models.Model):
 
     def _is_readonly(self):
         self.ensure_one()
-        return self.state == "done"
+        return self.state != "draft"
 
     def _get_product_catalog_domain(self):
         domain = super()._get_product_catalog_domain()

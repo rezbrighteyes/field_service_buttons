@@ -240,6 +240,26 @@ class TestCreditReturnDraft(TransactionCase):
         self.assertTrue(draft.exists())
         self.assertEqual(draft.state, 'draft')
 
+    def test_cancel_credit_deletes_the_draft_and_keeps_a_record(self):
+        credit = self._press_credit_button()
+        credit._update_order_line_info(self.product_a.id, 2)
+        move = credit.move_id
+        self.assertTrue(move)
+
+        credit.action_discard_credit_return()
+        self.assertEqual(credit.state, 'cancel')
+        self.assertFalse(move.exists(), 'The draft credit note must be deleted.')
+        log = self.env['reza.fsm.credit.return.log'].search([
+            ('credit_ref_id', '=', credit.id), ('action', '=', 'cancel'),
+        ])
+        self.assertTrue(log, 'The cancelled products must be in the log.')
+        self.assertEqual(log[0].product_id, self.product_a)
+
+        again = self._press_credit_button()
+        self.assertNotEqual(again, credit, 'A cancelled credit must not reopen.')
+        with self.assertRaises(ValidationError):
+            credit.action_create_credit_note()
+
     def _office_user(self, login, can_post):
         groups = [
             self.env.ref('base.group_user').id,
