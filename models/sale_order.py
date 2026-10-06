@@ -15,14 +15,42 @@ class SaleOrder(models.Model):
         for order in self:
             if order._reza_fsm_user_can_confirm_main_warehouse():
                 continue
-            if not order._reza_fsm_needs_office_warehouse_review():
-                continue
-            order.message_post(body=_(
-                "Main warehouse confirmation blocked: field reps must leave "
-                "LIA/WH and other main warehouse orders for office review."
-            ))
-            return order._reza_fsm_main_warehouse_block_warning()
+            if order._reza_fsm_is_main_warehouse_supply_order():
+                order.message_post(body=_(
+                    "Main warehouse confirmation blocked: field reps must leave "
+                    "LIA/WH and other main warehouse orders for office review."
+                ))
+                return order._reza_fsm_main_warehouse_block_warning()
+            # A van order is also held back when the van cannot cover it. Say
+            # so, and name the products: the old "main warehouse" wording sent
+            # reps and the office looking for the wrong problem (IT-41).
+            shortage_lines = order._reza_fsm_rep_shortage_lines()
+            if shortage_lines:
+                summary = order._reza_fsm_shortage_summary(shortage_lines)
+                order.message_post(body=_(
+                    "Van stock confirmation blocked: %(location)s is short. %(summary)s",
+                    location=order.reza_icw_rep_location_id.display_name,
+                    summary=summary,
+                ))
+                return order._reza_fsm_van_shortage_block_warning(summary)
         return False
+
+    def _reza_fsm_rep_shortage_lines(self):
+        self.ensure_one()
+        rep_shortage_lines = getattr(self, "_reza_icw_get_rep_shortage_lines", None)
+        return rep_shortage_lines() if rep_shortage_lines else []
+
+    def _reza_fsm_shortage_summary(self, shortage_lines):
+        self.ensure_one()
+        return "; ".join(
+            _(
+                "%(product)s: ordered %(ordered)s, van has %(available)s",
+                product=line.product_id.display_name,
+                ordered="%g" % (available_qty + shortage_qty),
+                available="%g" % available_qty,
+            )
+            for line, available_qty, shortage_qty in shortage_lines
+        )
 
     def _reza_fsm_user_can_confirm_main_warehouse(self):
         user = self.env.user
@@ -55,8 +83,7 @@ class SaleOrder(models.Model):
         self.ensure_one()
         if self._reza_fsm_is_main_warehouse_supply_order():
             return True
-        rep_shortage_lines = getattr(self, "_reza_icw_get_rep_shortage_lines", None)
-        return bool(rep_shortage_lines and rep_shortage_lines())
+        return bool(self._reza_fsm_rep_shortage_lines())
 
     def _reza_icw_user_must_select_rep_location(self):
         if (
@@ -75,6 +102,23 @@ class SaleOrder(models.Model):
                 "message": _(
                     "This order must be reviewed and confirmed by the office "
                     "because it is being supplied from the main warehouse."
+                ),
+                "type": "warning",
+                "sticky": True,
+            },
+        }
+
+    def _reza_fsm_van_shortage_block_warning(self, summary):
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": _("Not Enough Stock in the Van"),
+                "message": _(
+                    "%(location)s cannot cover this order. %(summary)s. "
+                    "Reduce or remove these lines, or ask the office to confirm.",
+                    location=self.reza_icw_rep_location_id.display_name,
+                    summary=summary,
                 ),
                 "type": "warning",
                 "sticky": True,

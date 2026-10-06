@@ -7,3 +7,4 @@ from . import test_credit_return_fill_lines
 from . import test_credit_scrap
 from . import test_credit_return_draft
 from . import test_credit_return_log
+from . import test_van_shortage_message
