@@ -40,3 +40,11 @@ class TestVanShortageMessage(TransactionCase):
 
     def test_van_with_stock_is_not_blocked(self):
         self.assertFalse(self._block(False, []))
+
+    def test_confirmed_order_is_not_checked_again(self):
+        line = SimpleNamespace(product_id=SimpleNamespace(display_name="Pen Readers (2.5)"))
+        before = len(self.order.message_ids)
+        self.order.state = "sale"
+        self.assertFalse(self._block(False, [(line, 0.0, 12.0)]))
+        self.assertFalse(self._block(True, []))
+        self.assertEqual(len(self.order.message_ids), before)

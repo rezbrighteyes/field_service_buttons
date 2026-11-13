@@ -13,6 +13,12 @@ class SaleOrder(models.Model):
 
     def _reza_fsm_block_rep_main_warehouse_confirm(self):
         for order in self:
+            # Only a quotation can be blocked. A second Confirm on an order
+            # that is already confirmed (a double tap, a stale iPad screen)
+            # would measure the van AFTER this order's own delivery took the
+            # stock, and post a false "van has 0" note.
+            if order.state not in ("draft", "sent"):
+                continue
             if order._reza_fsm_user_can_confirm_main_warehouse():
                 continue
             if order._reza_fsm_is_main_warehouse_supply_order():
