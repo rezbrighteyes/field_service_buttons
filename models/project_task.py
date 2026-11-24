@@ -1002,6 +1002,11 @@ class ProjectTask(models.Model):
         customer = task.partner_id or task.parent_id.partner_id
         if not customer:
             return message
+        # The mirror is a staff note written as superuser. Portal followers
+        # can post on a task they can read, so without this a customer could
+        # put a "Rep update" note on any task partner's chatter.
+        if not self.env.user._is_internal():
+            return message
 
         rep_name = self.env.user.name
         clean_body = _fsm_chatter_plaintext(body)
